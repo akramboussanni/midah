@@ -2,6 +2,12 @@
 <h1 align="center">Midah</h1>
 <h6 align="center">simple vb-cable soundboard with every sound imaginable</h6>
 <div align="center">
+  <a href="https://github.com/akramboussanni/midah/releases/latest" target="_blank">
+    <img src="https://img.shields.io/badge/Download-Latest%20Release-blue?style=for-the-badge&logo=github&logoColor=white" alt="Download Latest Release"/>
+  </a>
+</div>
+
+<div align="center">
   <p></p>
 </div>
 
