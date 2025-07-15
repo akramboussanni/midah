@@ -1,0 +1,480 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 3%;
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 3%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 0 0% 100%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 0 0% 8%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 8%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 8%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 12%;
+    --input: 0 0% 12%;
+    --ring: 0 0% 100%;
+    --chart-1: 0 0% 100%;
+    --chart-2: 0 0% 80%;
+    --chart-3: 0 0% 60%;
+    --chart-4: 0 0% 40%;
+    --chart-5: 0 0% 20%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    background: #1a2238; /* rich dark blue, visually distinct from black */
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  code, pre {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-background;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/30;
+}
+
+/* Soundboard specific styles */
+.sound-card {
+  @apply relative overflow-hidden rounded-lg bg-card border border-border transition-all duration-300 ease-out;
+  backdrop-filter: blur(10px);
+}
+
+.sound-card:hover {
+  @apply shadow-lg shadow-primary/5;
+}
+
+.sound-card.playing {
+  @apply border-primary shadow-lg shadow-primary/20;
+  animation: pulse-glow 2s ease-in-out infinite alternate;
+}
+
+/* Waveform animation */
+.waveform-bar {
+  transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease-in-out;
+  transform-origin: bottom center;
+}
+
+.waveform-bar.animate-pulse {
+  animation: waveform-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes waveform-pulse {
+  0%, 100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.1);
+  }
+}
+
+@keyframes pulse-glow {
+  0% {
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.1);
+  }
+  100% {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+  }
+}
+
+.sound-card.playing::before {
+  content: '';
+  @apply absolute inset-0 bg-primary/5;
+  animation: ripple 2s ease-in-out infinite;
+}
+
+/* Audio waveform animation */
+.waveform {
+  @apply flex items-end space-x-1 h-8;
+}
+
+.waveform-bar {
+  @apply bg-primary rounded-full;
+  animation: waveform-animation 0.6s ease-in-out infinite;
+  animation-fill-mode: both;
+}
+
+.waveform-bar:nth-child(1) { animation-delay: 0s; }
+.waveform-bar:nth-child(2) { animation-delay: 0.1s; }
+.waveform-bar:nth-child(3) { animation-delay: 0.2s; }
+.waveform-bar:nth-child(4) { animation-delay: 0.3s; }
+.waveform-bar:nth-child(5) { animation-delay: 0.4s; }
+
+/* Animations */
+@keyframes pulse-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.1);
+  }
+  100% {
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05);
+  }
+}
+
+@keyframes ripple {
+  0% {
+    opacity: 0.1;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 0.2;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.1;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes waveform-animation {
+  0%, 100% {
+    transform: scaleY(0.3);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+/* Waveform motion animations for individual bars */
+@keyframes waveMotion-1 {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(2.5); }
+}
+
+@keyframes waveMotion-2 {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(3.0); }
+}
+
+@keyframes waveMotion-3 {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(2.8); }
+}
+
+@keyframes waveMotion-4 {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(3.2); }
+}
+
+@keyframes waveMotion-5 {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(2.7); }
+}
+
+/* Glass morphism effects */
+.glass {
+  @apply bg-card/50 backdrop-blur-xl border border-border/50;
+}
+
+.glass-strong {
+  @apply bg-card/80 backdrop-blur-2xl border border-border/80;
+}
+
+/* Typography */
+.font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.font-sans {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Line clamp utilities */
+.line-clamp-1 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+/* Button animations */
+.btn-primary {
+  @apply relative overflow-hidden bg-primary text-primary-foreground px-4 py-2 rounded-md font-medium transition-all duration-200;
+}
+
+.btn-primary:hover {
+  @apply shadow-lg shadow-primary/20 transform translate-y-[-1px];
+}
+
+.btn-primary:active {
+  @apply transform translate-y-0;
+}
+
+.btn-primary::before {
+  content: '';
+  @apply absolute inset-0 bg-white/10 transform scale-x-0 origin-left transition-transform duration-300;
+}
+
+.btn-primary:hover::before {
+  @apply scale-x-100;
+}
+
+/* Input styles */
+.input-modern {
+  @apply border border-border rounded-md px-3 py-2 text-sm transition-all duration-200;
+  @apply focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50;
+  background: #0f1218;
+}
+
+/* Card hover effects */
+.card-hover {
+  @apply transition-all duration-300 ease-out;
+}
+
+.card-hover:hover {
+  @apply transform translate-y-[-2px] shadow-xl shadow-black/20;
+}
+
+/* Loading animation */
+.loading-dots {
+  @apply inline-flex space-x-1;
+}
+
+.loading-dots > div {
+  @apply w-2 h-2 bg-primary rounded-full;
+  animation: loading-bounce 1.4s ease-in-out infinite both;
+}
+
+.loading-dots > div:nth-child(1) { animation-delay: -0.32s; }
+.loading-dots > div:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes loading-bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+/* Fade in animation */
+.fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Slide in animation */
+.slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Volume slider styles */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto !important;
+  z-index: 10;
+  position: relative;
+}
+
+/* Volume control isolation */
+.volume-control {
+  pointer-events: auto !important;
+  isolation: isolate;
+  z-index: 10;
+  position: relative;
+}
+
+.volume-control * {
+  pointer-events: auto !important;
+}
+
+.volume-control input[type="range"] {
+  z-index: 11;
+  position: relative;
+}
+
+/* Volume dragging state */
+.volume-dragging {
+  pointer-events: none;
+}
+
+.volume-dragging .volume-control {
+  pointer-events: auto !important;
+}
+
+.volume-dragging .volume-control * {
+  pointer-events: auto !important;
+}
+
+.slider::-webkit-slider-track {
+  @apply bg-gray-700 rounded-lg h-1;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  @apply bg-white rounded-full w-3 h-3 shadow-lg;
+  transition: all 0.2s ease;
+}
+
+.slider::-webkit-slider-thumb:hover {
+  @apply bg-gray-200 transform scale-110;
+}
+
+.slider::-moz-range-track {
+  @apply bg-gray-700 rounded-lg h-1 border-0;
+}
+
+.slider::-moz-range-thumb {
+  @apply bg-white rounded-full w-3 h-3 border-0 shadow-lg;
+  transition: all 0.2s ease;
+}
+
+.slider::-moz-range-thumb:hover {
+  @apply bg-gray-200 transform scale-110;
+}
+
+/* Gradient text */
+.gradient-text {
+  @apply bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent;
+}
+
+/* Glow effect */
+.glow {
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+.glow-primary {
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+} 
+
+@keyframes waveMotion {
+  0%, 100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.8);
+  }
+}
+
+.animate-wave {
+  animation: waveMotion 1s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* Window controls */
+[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+[data-tauri-drag-region] button {
+  -webkit-app-region: no-drag;
+}
+
+/* Prevent text selection in draggable areas */
+[data-tauri-drag-region] * {
+  user-select: none;
+}
+
+/* YouTube search results - ensure no blue colors */
+.youtube-search-results * {
+  color: inherit !important;
+  text-decoration: none !important;
+}
+
+.youtube-search-results a {
+  color: inherit !important;
+  text-decoration: none !important;
+}
+
+.youtube-search-results a:hover {
+  color: inherit !important;
+  text-decoration: none !important;
+}
+
+/* Video card specific overrides */
+.video-card * {
+  color: inherit !important;
+}
+
+.video-card a {
+  color: inherit !important;
+  text-decoration: none !important;
+}
+
+/* Ensure no blue colors in search results */
+.search-results-container * {
+  color: inherit !important;
+}
+
+.search-results-container a {
+  color: inherit !important;
+  text-decoration: none !important;
+}
