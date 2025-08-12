@@ -52,12 +52,10 @@ pub async fn check_virtual_cable() -> Result<VirtualCableStatus, String> {
             if let Ok(name) = device.name() {
                 let name_lower = name.to_lowercase();
                 if name_lower.contains("vb-cable") || name_lower.contains("vb audio") || name_lower.contains("virtual cable") || name_lower.contains("vb-audio") {
-                    // Detected VB-Cable
                     found = true;
                     device_name = Some(name.clone());
                     break;
                 } else if name_lower.contains("voicemod") {
-                    // Detected Voicemod
                     found = true;
                     device_name = Some(name.clone());
                     is_voicemod = true;

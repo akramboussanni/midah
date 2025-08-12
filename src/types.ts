@@ -1,12 +1,25 @@
+export interface Modifiers {
+  ctrl: boolean;
+  alt: boolean;
+  shift: boolean;
+  meta: boolean;
+}
+
+export interface Hotkey {
+  key: string;
+  modifiers: Modifiers;
+}
+
 export interface Sound {
   id: string;
   name: string;
   file_path: string;
   category?: string;
-  hotkey?: string;
+  categories?: string[];
+  hotkey?: Hotkey;
   volume: number;
   startPosition?: number;
-  duration?: number; // Duration in seconds
+  duration?: number;
   created_at: string;
   updated_at: string;
 }
@@ -14,12 +27,11 @@ export interface Sound {
 export interface AudioDevice {
   name: string;
   is_default: boolean;
-  device_type: string; // "input" or "output"
+  device_type: string;
 }
 
 export type TabType = 'sounds' | 'youtube' | 'settings';
 
-// YouTube types
 export interface VideoInfo {
   id: string;
   title: string;
@@ -42,4 +54,20 @@ export interface DownloadProgress {
   progress: number;
   downloaded_bytes?: number;
   total_bytes?: number;
-} 
+}
+
+export interface HotkeyBinding {
+  id: string;
+  hotkey: string;
+  action: 'PlaySound' | 'StopAllSounds';
+  soundId?: string;
+  createdAt: string;
+}
+
+export interface GlobalHotkey {
+  key: string;
+  value: string;
+  updatedAt: string;
+}
+
+export type FrontendHotkeyBinding = HotkeyBinding; 

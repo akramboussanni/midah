@@ -1,18 +1,17 @@
+use crate::database;
+use crate::hotkeys::Hotkey;
+use crate::audio;
 use anyhow::Result;
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 use tracing::info;
 use uuid::Uuid;
-use crate::database;
-use crate::audio;
 
 #[derive(Debug, Deserialize)]
 pub struct AddSoundRequest {
     pub name: String,
     pub file_path: String,
     pub category: Option<String>,
-    pub hotkey: Option<String>,
+    pub hotkey: Option<Hotkey>,
     pub volume: Option<f32>,
 }
 
@@ -22,16 +21,18 @@ pub struct SoundResponse {
     pub name: String,
     pub file_path: String,
     pub category: Option<String>,
-    pub hotkey: Option<String>,
+    pub hotkey: Option<Hotkey>,
     pub volume: f32,
     pub start_position: Option<f32>,
     pub duration: Option<f32>,
     pub created_at: String,
     pub updated_at: String,
+    pub categories: Vec<String>,
 }
 
 impl From<database::Sound> for SoundResponse {
     fn from(sound: database::Sound) -> Self {
+        let categories = database::get_sound_categories(&sound.id).unwrap_or_default();
         Self {
             id: sound.id,
             name: sound.name,
@@ -43,6 +44,7 @@ impl From<database::Sound> for SoundResponse {
             duration: sound.duration,
             created_at: sound.created_at.to_rfc3339(),
             updated_at: sound.updated_at.to_rfc3339(),
+            categories,
         }
     }
 }
@@ -57,10 +59,10 @@ pub async fn get_sounds() -> Result<Vec<SoundResponse>, String> {
 pub async fn add_sound(request: AddSoundRequest) -> Result<SoundResponse, String> {
     info!("Adding new sound: {:?}", request);
     
-    let duration = audio::get_audio_duration(&request.file_path)
+    let duration = crate::audio::get_audio_duration(&request.file_path)
         .map_err(|e| format!("Failed to get audio duration: {}", e))?;
 
-    let now = Utc::now();
+    let now = chrono::Utc::now();
     let sound = database::Sound {
         id: Uuid::new_v4().to_string(),
         name: request.name,
@@ -75,6 +77,9 @@ pub async fn add_sound(request: AddSoundRequest) -> Result<SoundResponse, String
     };
 
     database::add_sound(&sound).map_err(|e| e.to_string())?;
+    if let Some(cat) = &sound.category {
+        let _ = database::set_sound_categories(&sound.id, &vec![cat.clone()]);
+    }
     info!("Added new sound: {} (duration: {:.2}s)", sound.name, duration);
 
     Ok(SoundResponse::from(sound))
@@ -82,7 +87,7 @@ pub async fn add_sound(request: AddSoundRequest) -> Result<SoundResponse, String
 
 #[tauri::command]
 pub async fn remove_sound(id: String) -> Result<(), String> {
-    let _ = audio::stop_sound_command(id.clone()).await;
+    let _ = crate::audio::stop_sound_command(id.clone()).await;
     
     database::remove_sound(&id).map_err(|e| e.to_string())?;
     info!("Removed sound with id: {}", id);
@@ -95,9 +100,9 @@ pub async fn play_sound(id: String, state: tauri::State<'_, std::sync::Mutex<aud
         .map_err(|e| e.to_string())?
         .ok_or("Sound not found")?;
 
-    let _ = audio::stop_sound_command(id.clone()).await;
+    let _ = crate::audio::stop_sound_command(id.clone()).await;
 
-    audio::play_audio_file_command(sound.file_path.clone(), id.clone(), sound.start_position, sound.volume, Some(false))
+    crate::audio::play_audio_file_command(sound.file_path.clone(), id.clone(), sound.start_position, sound.volume, Some(false))
         .await
         .map_err(|e| e.to_string())?;
 
@@ -111,8 +116,7 @@ pub async fn play_sound(id: String, state: tauri::State<'_, std::sync::Mutex<aud
 #[tauri::command]
 pub async fn stop_sound(id: String, state: tauri::State<'_, std::sync::Mutex<audio::AudioManager>>) -> Result<(), String> {
     let id_clone = id.clone();
-    audio::stop_sound_command(id.clone()).await?;
-    // Clear playback position
+    crate::audio::stop_sound_command(id.clone()).await?;
     state.lock().unwrap().clear_playback_position(&id);
     info!("Stopped sound with id: {}", id_clone);
     Ok(())
@@ -120,7 +124,7 @@ pub async fn stop_sound(id: String, state: tauri::State<'_, std::sync::Mutex<aud
 
 #[tauri::command]
 pub async fn stop_all_sounds() -> Result<(), String> {
-    audio::stop_all_sounds_command().await?;
+    crate::audio::stop_all_sounds_command().await?;
     info!("Stopped all sounds");
     Ok(())
 }
@@ -133,7 +137,7 @@ pub async fn get_categories() -> Result<Vec<database::Category>, String> {
 
 #[tauri::command]
 pub async fn add_category(name: String, color: Option<String>) -> Result<database::Category, String> {
-    let now = Utc::now();
+    let now = chrono::Utc::now();
     let category = database::Category {
         id: Uuid::new_v4().to_string(),
         name,
@@ -159,7 +163,7 @@ pub async fn remove_category(id: String) -> Result<(), String> {
 pub async fn import_audio_file(file_path: String) -> Result<SoundResponse, String> {
     info!("Importing audio file: {}", file_path);
     
-    let path = Path::new(&file_path);
+    let path = std::path::Path::new(&file_path);
     
     if !path.exists() {
         return Err("File does not exist".to_string());
@@ -194,12 +198,11 @@ pub async fn update_sound_volume(id: String, volume: f32) -> Result<(), String> 
         .ok_or("Sound not found")?;
 
     sound.volume = volume.clamp(0.0, 1.0);
-    sound.updated_at = Utc::now();
+    sound.updated_at = chrono::Utc::now();
 
     database::add_sound(&sound).map_err(|e| e.to_string())?;
     
-    // Update the volume of the sound if it's currently playing
-    let _ = audio::update_sound_volume_command(id.clone(), sound.volume).await;
+    let _ = crate::audio::update_sound_volume_command(id.clone(), sound.volume).await;
     
     info!("Updated volume for sound: {}", sound.name);
     Ok(())
@@ -207,16 +210,24 @@ pub async fn update_sound_volume(id: String, volume: f32) -> Result<(), String> 
 
 //todo add hotkeys and category
 #[tauri::command]
-pub async fn update_sound_hotkey(id: String, hotkey: Option<String>) -> Result<(), String> {
-    let mut sound = database::get_sound_by_id(&id)
+pub async fn update_sound_hotkey(_app: tauri::AppHandle, id: String, new_hotkey: Option<Hotkey>) -> Result<(), String> {
+    info!("[backend] update_sound_hotkey called: sound_id={} new_hotkey={:?}", id, new_hotkey);
+    let sound = database::get_sound_by_id(&id)
         .map_err(|e| e.to_string())?
         .ok_or("Sound not found")?;
-
-    sound.hotkey = hotkey;
-    sound.updated_at = Utc::now();
-
-    database::add_sound(&sound).map_err(|e| e.to_string())?;
-    info!("Updated hotkey for sound: {}", sound.name);
+    let mut updated_sound = sound.clone();
+    updated_sound.hotkey = new_hotkey.clone();
+    updated_sound.updated_at = chrono::Utc::now();
+    info!("[backend] Updating sound in database: id={}, hotkey={:?}", id, new_hotkey);
+    database::add_sound(&updated_sound).map_err(|e| e.to_string())?;
+    info!("[backend] Sound updated in database successfully");
+    if let Some(controller) = crate::hotkeys::HOTKEY_MANAGER.get() {
+        let binding_id = format!("sound_{}", id);
+        let _ = controller.remove_binding(&binding_id);
+        if let Some(hotkey) = new_hotkey {
+            let _ = controller.add_binding(hotkey.key, hotkey.modifiers, crate::hotkeys::HotkeyAction::PlaySound { sound_id: id.clone() }, Some(id));
+        }
+    }
     Ok(())
 }
 
@@ -227,10 +238,25 @@ pub async fn update_sound_category(id: String, category: Option<String>) -> Resu
         .ok_or("Sound not found")?;
 
     sound.category = category;
-    sound.updated_at = Utc::now();
+    sound.updated_at = chrono::Utc::now();
 
     database::add_sound(&sound).map_err(|e| e.to_string())?;
     info!("Updated category for sound: {}", sound.name);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_sound_categories(id: String, categories: Vec<String>) -> Result<(), String> {
+    let mut sound = database::get_sound_by_id(&id)
+        .map_err(|e| e.to_string())?
+        .ok_or("Sound not found")?;
+    // keep legacy single category (legacy)
+    sound.category = categories.get(0).cloned();
+    sound.updated_at = chrono::Utc::now();
+    database::add_sound(&sound).map_err(|e| e.to_string())?;
+
+    database::set_sound_categories(&id, &categories).map_err(|e| e.to_string())?;
+    info!("Updated categories for sound: {} -> {:?}", sound.name, categories);
     Ok(())
 }
 //end todo
@@ -241,9 +267,9 @@ pub async fn play_sound_local(id: String) -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .ok_or("Sound not found")?;
 
-    let _ = audio::stop_sound_command(id.clone()).await;
+    let _ = crate::audio::stop_sound_command(id.clone()).await;
 
-    audio::play_audio_file_command(sound.file_path, id, sound.start_position, sound.volume, Some(true))
+    crate::audio::play_audio_file_command(sound.file_path, id, sound.start_position, sound.volume, Some(true))
         .await
         .map_err(|e| e.to_string())?;
 
@@ -260,7 +286,7 @@ pub async fn update_sound_start_position(id: String, start_position: f32) -> Res
         .ok_or("Sound not found")?;
 
     sound.start_position = Some(start_position.max(0.0));
-    sound.updated_at = Utc::now();
+    sound.updated_at = chrono::Utc::now();
 
     database::add_sound(&sound).map_err(|e| e.to_string())?;
     info!("Updated start position for sound: {}", sound.name);
@@ -269,7 +295,7 @@ pub async fn update_sound_start_position(id: String, start_position: f32) -> Res
 
 #[tauri::command]
 pub async fn get_playing_sounds() -> Result<Vec<String>, String> {
-    let playing_sounds = audio::get_playing_sounds_command().await?;
+    let playing_sounds = crate::audio::get_playing_sounds_command().await?;
     Ok(playing_sounds)
 }
 
@@ -279,7 +305,7 @@ pub async fn seek_sound(id: String, position: f32, local_only: bool) -> Result<(
         .map_err(|e| e.to_string())?
         .ok_or("Sound not found")?;
 
-    audio::restart_sound_from_position(id, sound.file_path, position, sound.volume, local_only)
+    crate::audio::restart_sound_from_position(id, sound.file_path, position, sound.volume, local_only)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -289,22 +315,8 @@ pub async fn seek_sound(id: String, position: f32, local_only: bool) -> Result<(
 
 #[tauri::command]
 pub async fn remove_all_sounds() -> Result<(), String> {
-    // Stop all currently playing sounds
     let _ = crate::audio::stop_all_sounds_command().await;
-    // Remove all sounds from the database
     crate::database::remove_all_sounds().map_err(|e| e.to_string())?;
     tracing::info!("Removed all sounds from database");
     Ok(())
 }
-
-//todo hotkeys
-pub fn register_hotkeys() -> Result<()> {
-    info!("Hotkey registration not yet implemented");
-    Ok(())
-}
-
-pub fn unregister_hotkeys() -> Result<()> {
-    info!("Hotkey unregistration not yet implemented");
-    Ok(())
-} 
-//end todo

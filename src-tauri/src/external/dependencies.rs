@@ -146,7 +146,6 @@ impl DependencyManager {
         let executable_name = dep_type.executable_name();
         info!("Checking for {} (executable: {})", dep_type.name(), executable_name);
         
-        // Check download dir
         let dep_path = self.download_dir.join(executable_name);
         if dep_path.exists() {
             info!("{} found in download dir: {:?}", dep_type.name(), dep_path);
@@ -154,7 +153,6 @@ impl DependencyManager {
         }
         info!("{} not found in download dir: {:?}", dep_type.name(), dep_path);
         
-        // Check PATH using call_shell_process
         let which_cmd = if cfg!(windows) { "where" } else { "which" };
         info!("Running {} {} to find {}", which_cmd, executable_name, dep_type.name());
         
@@ -176,7 +174,6 @@ impl DependencyManager {
                     let path = PathBuf::from(first_path);
                     info!("Found {} at: {:?}", dep_type.name(), path);
                     
-                    // Version check
                     info!("Running version check: {} {}", path.to_string_lossy(), dep_type.version_arg());
                     let version_result = call_shell_process(
                         app_handle,
@@ -275,7 +272,6 @@ impl DependencyManager {
         
         fs::copy(&extracted_path, &final_path).context(format!("Failed to copy {}", dep_type.name()))?;
 
-        // Make it executable on Unix systems
         self.set_executable_permissions(&final_path)?;
 
         info!("Successfully downloaded {} to: {:?}", dep_type.name(), final_path);
@@ -418,7 +414,6 @@ pub async fn call_shell_process(
             Err(error_msg)
         }
         Err(_) => {
-            // Optionally kill the process on timeout
             let _ = _child.kill();
             let error_msg = format!("{} timed out", program);
             info!("{}", error_msg);

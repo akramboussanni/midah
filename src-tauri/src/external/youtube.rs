@@ -270,7 +270,6 @@ impl YouTubeService {
             .spawn()
             .map_err(|e| anyhow::anyhow!("Failed to spawn yt-dlp: {}", e))?;
 
-        // Send initializing status
         let init_progress = DownloadProgress {
             video_id: video_id.to_string(),
             status: "initializing".to_string(),

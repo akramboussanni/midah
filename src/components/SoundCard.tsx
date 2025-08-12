@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Play, Square, Volume2, MoreVertical, Headphones, Clock } from 'lucide-react';
-import { Sound } from '../types';
+import { Sound, Hotkey } from '../types';
 import { SoundCardMenu } from './SoundCardMenu';
 
 interface SoundCardProps {
@@ -13,18 +13,30 @@ interface SoundCardProps {
   onRemove: (soundId: string) => void;
   onPlayLocal: (soundId: string) => void;
   onSetStartPosition: (soundId: string, position: number) => void;
-  onSetHotkey: (soundId: string, hotkey: string) => void;
+  onSetHotkey: (soundId: string, hotkey: Hotkey) => void;
+  onSetCategories: (soundId: string, categories: string[]) => void;
+  availableCategories: string[];
   onSeek?: (soundId: string, position: number) => void;
   getPlaybackPosition?: (soundId: string) => Promise<number | null>;
   index: number;
 }
 
-// Helper function to format time
 const formatTime = (seconds: number): string => {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
+
+function hotkeyToString(hotkey?: Hotkey): string {
+  if (!hotkey) return '';
+  const mods = [];
+  if (hotkey.modifiers.ctrl) mods.push('Ctrl');
+  if (hotkey.modifiers.alt) mods.push('Alt');
+  if (hotkey.modifiers.shift) mods.push('Shift');
+  if (hotkey.modifiers.meta) mods.push('Meta');
+  if (hotkey.key) mods.push(hotkey.key.toUpperCase());
+  return mods.join('+');
+}
 
 export const SoundCard = ({ 
   sound, 
@@ -37,6 +49,8 @@ export const SoundCard = ({
   onPlayLocal,
   onSetStartPosition,
   onSetHotkey,
+  onSetCategories,
+  availableCategories,
   onSeek,
   getPlaybackPosition,
   index 
@@ -52,7 +66,6 @@ export const SoundCard = ({
     }
   }, [isMenuOpen]);
 
-  // Progress timer effect - now uses real playback position
   useEffect(() => {
     if (!isPlaying) {
       setCurrentTime(0);
@@ -74,7 +87,6 @@ export const SoundCard = ({
   const duration = sound.duration || 0;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
-  // Progress bar click handler
   const handleProgressBarClick = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
     console.log('Progress bar clicked!', { isPlaying, duration, onSeek: !!onSeek });
     if (!isPlaying || !duration || !onSeek) {
@@ -99,13 +111,12 @@ export const SoundCard = ({
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          {/* Waveform Centered and Animated */}
           <div className="relative h-6 w-6 flex items-center justify-center">
             <div className="flex items-center space-x-1 flex-shrink-0 h-4">
               {[1, 2, 3, 4, 5].map((i) => {
-                const duration = (Math.random() * 0.3 + 0.5).toFixed(2); // 0.5s – 0.8s
-                const delay = (Math.random() * 0.3).toFixed(2);          // 0s – 0.3s
-                const scale = (2.0 + Math.random() * 1.5).toFixed(2);    // scaleY target 2.0-3.5
+                const duration = (Math.random() * 0.3 + 0.5).toFixed(2);
+                const delay = (Math.random() * 0.3).toFixed(2);
+                const scale = (2.0 + Math.random() * 1.5).toFixed(2);
 
                 return (
                   <div
@@ -153,7 +164,6 @@ export const SoundCard = ({
             )}
           </button>
 
-          {/* Menu Button */}
           <div className="relative">
             <button
               ref={menuBtnRef}
@@ -172,13 +182,14 @@ export const SoundCard = ({
                 onPlayLocal={onPlayLocal}
                 onSetStartPosition={onSetStartPosition}
                 onSetHotkey={onSetHotkey}
+                onSetCategories={onSetCategories}
+                availableCategories={availableCategories}
               />
             )}
           </div>
         </div>
       </div>
 
-      {/* Progress Bar */}
       {isPlaying && duration > 0 && (
         <div className="mb-3">
           <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
@@ -197,7 +208,6 @@ export const SoundCard = ({
         </div>
       )}
 
-      {/* Duration Display (when not playing) */}
       {!isPlaying && duration > 0 && (
         <div className="flex items-center gap-1 mb-3 text-xs text-gray-400">
           <Clock className="h-3 w-3" />
@@ -245,7 +255,7 @@ export const SoundCard = ({
         {sound.hotkey && (
           <div className="flex items-center justify-end">
             <span className="bg-gray-800 px-2 py-1 rounded text-xs font-mono border border-gray-700 text-gray-400">
-              {sound.hotkey}
+              {hotkeyToString(sound.hotkey)}
             </span>
           </div>
         )}

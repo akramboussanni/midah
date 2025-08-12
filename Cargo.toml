@@ -34,10 +34,14 @@ zip = "0.6"
 flate2 = "1.0"
 xz2 = "0.1"
 tar = "0.4"
-windows = { version = "0.48", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.48", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
+tauri-plugin-global-shortcut = "2"
 futures-util = "0.3"
+global-hotkey = "0.7"
+crossbeam-channel = "0.5.15"
+rdev = "0.5.3"
 
 
 [features]
@@ -46,3 +50,4 @@ custom-protocol = ["tauri/custom-protocol"]
 [[bin]]
 name = "midah"
 path = "src-tauri/src/main.rs"
+

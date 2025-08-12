@@ -19,10 +19,8 @@ export const VideoCard = ({
   onResetDownload 
 }: VideoCardProps) => {
   const formatDuration = (duration: string) => {
-    // Convert ISO 8601 duration (PT4M13S) to readable format (4:13)
-    // Also handle already formatted durations from backend
     if (duration.includes(':')) {
-      return duration; // Already formatted
+      return duration;
     }
     
     const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
@@ -62,7 +60,6 @@ export const VideoCard = ({
 
   const handleDownload = async () => {
     if (isCompleted) {
-      // Reset the download state to allow re-downloading
       onResetDownload(video.id);
     } else {
       await onDownload(video.id, video.title);
@@ -109,7 +106,7 @@ export const VideoCard = ({
       className="border border-gray-800 rounded-lg overflow-hidden hover:border-gray-700 transition-all duration-200 group"
       style={{ background: 'rgba(10, 13, 19, 0.98)' }}
     >
-      {/* Thumbnail */}
+
       <div className="relative aspect-video bg-gray-800 overflow-hidden">
         <img
           src={video.thumbnail}
@@ -117,7 +114,7 @@ export const VideoCard = ({
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
         />
         
-        {/* Duration overlay */}
+
         {video.duration && (
           <div className="absolute bottom-2 right-2 bg-black bg-opacity-80 text-white text-xs px-2 py-1 rounded">
             <Clock className="inline w-3 h-3 mr-1" />
@@ -126,14 +123,14 @@ export const VideoCard = ({
         )}
       </div>
 
-      {/* Content */}
+
       <div className="p-4 space-y-3">
-        {/* Title */}
+
         <h3 className="font-medium text-white line-clamp-2 group-hover:text-gray-300 transition-colors duration-200 [&>*]:text-white [&>*]:no-underline">
           {video.title}
         </h3>
 
-        {/* Channel and metadata */}
+
         <div className="space-y-2 text-sm text-gray-400 [&>*]:text-gray-400 [&>*]:no-underline">
           <div className="flex items-center">
             <User className="w-4 h-4 mr-2" />
@@ -155,12 +152,12 @@ export const VideoCard = ({
           </div>
         </div>
 
-        {/* Description preview */}
+
         <p className="text-xs text-gray-500 line-clamp-2 [&>*]:text-gray-500 [&>*]:no-underline">
           {video.description}
         </p>
 
-        {/* Download button */}
+
         <div className="pt-2">
           <button
             onClick={handleDownload}
@@ -170,7 +167,7 @@ export const VideoCard = ({
             {getButtonContent()}
           </button>
           
-          {/* Progress bar */}
+
           {isDownloading && (
             <div className="mt-2 bg-gray-700 rounded-full h-1">
               <div

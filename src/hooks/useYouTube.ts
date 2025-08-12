@@ -3,7 +3,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { VideoInfo, SearchResult } from '../types';
 
-// Helper function to detect YouTube URLs
 const isYouTubeUrl = (input: string): boolean => {
   return input.includes('youtube.com') || input.includes('youtu.be');
 };
@@ -19,7 +18,6 @@ export const useYouTube = (onSoundAdded?: () => void) => {
   const [completedDownloads, setCompletedDownloads] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
-  // Listen for download progress events from the backend
   useEffect(() => {
     const unlisten = listen('youtube-download-progress', (event) => {
       const { video_id, progress, status } = event.payload as { 
@@ -31,7 +29,6 @@ export const useYouTube = (onSoundAdded?: () => void) => {
       setDownloadProgress(prev => new Map(prev).set(video_id, progress));
       setDownloadStatus(prev => new Map(prev).set(video_id, status));
       
-      // If download is completed, mark it as done
       if (status === 'completed') {
         setCompletedDownloads(prev => new Set(prev).add(video_id));
         setDownloadingVideos(prev => {
@@ -41,7 +38,6 @@ export const useYouTube = (onSoundAdded?: () => void) => {
         });
       }
       
-      // If there's an error, handle it
       if (status === 'error') {
         setError(`Failed to download video ${video_id}`);
         setDownloadingVideos(prev => {
@@ -68,14 +64,12 @@ export const useYouTube = (onSoundAdded?: () => void) => {
     setError(null);
 
     try {
-      // Check if the query is a YouTube URL
       if (isYouTubeUrl(query)) {
         const videoInfo: VideoInfo = await invoke('get_video_info_by_url', { url: query });
         setSearchResults([videoInfo]);
         setNextPageToken(undefined);
         setSearchQuery(query);
       } else {
-        // Regular search
         const result: SearchResult = await invoke('search_videos', {
           query,
           maxResults,
@@ -132,7 +126,6 @@ export const useYouTube = (onSoundAdded?: () => void) => {
       return;
     }
 
-    // Reset download state
     setCompletedDownloads(prev => {
       const newSet = new Set(prev);
       newSet.delete(videoId);
@@ -157,7 +150,6 @@ export const useYouTube = (onSoundAdded?: () => void) => {
         outputPath,
       });
 
-      // Add the downloaded file to the soundboard
       await invoke('add_sound', {
         request: {
           name: videoTitle,
@@ -167,7 +159,6 @@ export const useYouTube = (onSoundAdded?: () => void) => {
         },
       });
 
-      // Refresh the sound list
       if (onSoundAdded) {
         onSoundAdded();
       }
@@ -177,7 +168,6 @@ export const useYouTube = (onSoundAdded?: () => void) => {
       setError(err instanceof Error ? err.message : 'Failed to download video');
       console.error('Download error:', err);
       
-      // Clean up download state on error
       setDownloadingVideos(prev => {
         const newSet = new Set(prev);
         newSet.delete(videoId);

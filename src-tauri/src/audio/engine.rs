@@ -52,7 +52,7 @@ pub enum AudioCommand {
 
 struct SoundInstance {
     sinks: Vec<rodio::Sink>,
-    streams: Vec<(rodio::OutputStream, rodio::OutputStreamHandle)>,//for keep alive
+    _streams: Vec<(rodio::OutputStream, rodio::OutputStreamHandle)>,//for keep alive
     device_volumes: Vec<f32>,
     sound_volume: f32,
 }
@@ -66,7 +66,7 @@ impl SoundInstance {
     ) -> Self {
         Self {
             sinks,
-            streams,
+            _streams: streams,
             device_volumes,
             sound_volume,
         }

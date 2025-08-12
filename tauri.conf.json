@@ -45,6 +45,12 @@
   "plugins": {
     "shell": {
       "open": true
+    },
+    "dialog": {
+      "all": true
+    },
+    "globalShortcut": {
+      "all": true
     }
   }
 }

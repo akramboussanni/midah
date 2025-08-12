@@ -44,7 +44,7 @@
   }
   
   body {
-    background: #1a2238; /* rich dark blue, visually distinct from black */
+    background: #1a2238;
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
@@ -54,7 +54,7 @@
   }
 }
 
-/* Custom scrollbar */
+
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -71,7 +71,7 @@
   @apply bg-muted-foreground/30;
 }
 
-/* Soundboard specific styles */
+
 .sound-card {
   @apply relative overflow-hidden rounded-lg bg-card border border-border transition-all duration-300 ease-out;
   backdrop-filter: blur(10px);
@@ -86,7 +86,7 @@
   animation: pulse-glow 2s ease-in-out infinite alternate;
 }
 
-/* Waveform animation */
+
 .waveform-bar {
   transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease-in-out;
   transform-origin: bottom center;
@@ -120,7 +120,7 @@
   animation: ripple 2s ease-in-out infinite;
 }
 
-/* Audio waveform animation */
+
 .waveform {
   @apply flex items-end space-x-1 h-8;
 }
@@ -137,7 +137,7 @@
 .waveform-bar:nth-child(4) { animation-delay: 0.3s; }
 .waveform-bar:nth-child(5) { animation-delay: 0.4s; }
 
-/* Animations */
+
 @keyframes pulse-glow {
   0% {
     box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.1);
@@ -173,7 +173,7 @@
   }
 }
 
-/* Waveform motion animations for individual bars */
+
 @keyframes waveMotion-1 {
   0%, 100% { transform: scaleY(1); }
   50% { transform: scaleY(2.5); }
@@ -199,7 +199,7 @@
   50% { transform: scaleY(2.7); }
 }
 
-/* Glass morphism effects */
+
 .glass {
   @apply bg-card/50 backdrop-blur-xl border border-border/50;
 }
@@ -208,7 +208,7 @@
   @apply bg-card/80 backdrop-blur-2xl border border-border/80;
 }
 
-/* Typography */
+
 .font-mono {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
@@ -217,7 +217,7 @@
   font-family: 'Inter', system-ui, sans-serif;
 }
 
-/* Line clamp utilities */
+
 .line-clamp-1 {
   overflow: hidden;
   display: -webkit-box;
@@ -239,7 +239,7 @@
   -webkit-line-clamp: 3;
 }
 
-/* Button animations */
+
 .btn-primary {
   @apply relative overflow-hidden bg-primary text-primary-foreground px-4 py-2 rounded-md font-medium transition-all duration-200;
 }
@@ -261,14 +261,14 @@
   @apply scale-x-100;
 }
 
-/* Input styles */
+
 .input-modern {
   @apply border border-border rounded-md px-3 py-2 text-sm transition-all duration-200;
   @apply focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50;
   background: #0f1218;
 }
 
-/* Card hover effects */
+
 .card-hover {
   @apply transition-all duration-300 ease-out;
 }
@@ -277,7 +277,7 @@
   @apply transform translate-y-[-2px] shadow-xl shadow-black/20;
 }
 
-/* Loading animation */
+
 .loading-dots {
   @apply inline-flex space-x-1;
 }
@@ -299,7 +299,7 @@
   }
 }
 
-/* Fade in animation */
+
 .fade-in {
   animation: fadeIn 0.5s ease-out;
 }
@@ -315,7 +315,7 @@
   }
 }
 
-/* Slide in animation */
+
 .slide-in {
   animation: slideIn 0.3s ease-out;
 }
@@ -331,7 +331,7 @@
   }
 }
 
-/* Volume slider styles */
+
 .slider {
   -webkit-appearance: none;
   appearance: none;
@@ -342,7 +342,7 @@
   position: relative;
 }
 
-/* Volume control isolation */
+
 .volume-control {
   pointer-events: auto !important;
   isolation: isolate;
@@ -359,7 +359,7 @@
   position: relative;
 }
 
-/* Volume dragging state */
+
 .volume-dragging {
   pointer-events: none;
 }
@@ -400,12 +400,12 @@
   @apply bg-gray-200 transform scale-110;
 }
 
-/* Gradient text */
+
 .gradient-text {
   @apply bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent;
 }
 
-/* Glow effect */
+
 .glow {
   box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
 }
@@ -428,7 +428,7 @@
   transform-origin: center;
 }
 
-/* Window controls */
+
 [data-tauri-drag-region] {
   -webkit-app-region: drag;
   user-select: none;
@@ -438,12 +438,12 @@
   -webkit-app-region: no-drag;
 }
 
-/* Prevent text selection in draggable areas */
+
 [data-tauri-drag-region] * {
   user-select: none;
 }
 
-/* YouTube search results - ensure no blue colors */
+
 .youtube-search-results * {
   color: inherit !important;
   text-decoration: none !important;
@@ -459,7 +459,7 @@
   text-decoration: none !important;
 }
 
-/* Video card specific overrides */
+
 .video-card * {
   color: inherit !important;
 }
@@ -469,7 +469,7 @@
   text-decoration: none !important;
 }
 
-/* Ensure no blue colors in search results */
+
 .search-results-container * {
   color: inherit !important;
 }

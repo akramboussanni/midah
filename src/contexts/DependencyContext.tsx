@@ -50,7 +50,6 @@ export const DependencyProvider: React.FC<DependencyProviderProps> = ({ children
   const [hasCheckedDependencies, setHasCheckedDependencies] = useState(false);
 
   const checkDependencies = async () => {
-    // Prevent duplicate checks if already in progress
     if (isChecking) {
       console.log('Dependency check already in progress, skipping...');
       return;
@@ -60,7 +59,6 @@ export const DependencyProvider: React.FC<DependencyProviderProps> = ({ children
     setError(null);
     
     try {
-      // Add a timeout to prevent hanging
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Dependency check timed out')), 45000);
       });
@@ -75,7 +73,6 @@ export const DependencyProvider: React.FC<DependencyProviderProps> = ({ children
     } catch (err) {
       console.error('Dependency check failed:', err);
       setError(err instanceof Error ? err.message : String(err));
-      // Set a default state to prevent infinite loading
       setDependencies({
         "yt-dlp": { available: false, error: 'Check failed' },
         ffmpeg: { available: false, error: 'Check failed' }
@@ -91,7 +88,6 @@ export const DependencyProvider: React.FC<DependencyProviderProps> = ({ children
     setJustDownloaded(false);
     
     try {
-      // Add a timeout to prevent hanging
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Download timed out')), 45000);
       });
@@ -114,7 +110,7 @@ export const DependencyProvider: React.FC<DependencyProviderProps> = ({ children
         setError(`Failed to download some dependencies: ${errorMessages}`);
       } else {
         setJustDownloaded(true);
-        setTimeout(() => {//periodic
+        setTimeout(() => {
           checkDependencies();
         }, 500);
       }
@@ -147,17 +143,13 @@ export const DependencyProvider: React.FC<DependencyProviderProps> = ({ children
     }
     
     console.log('Checking dependencies for the first time...');
-    // Use setTimeout to make it non-blocking
     setTimeout(async () => {
       await checkDependencies();
       setHasCheckedDependencies(true);
     }, 0);
   };
 
-  // Don't check dependencies on startup - will be checked when YouTube tab is opened
-  // useEffect(() => {
-  //   checkDependencies();
-  // }, []);
+
 
   const value: DependencyContextType = {
     dependencies,

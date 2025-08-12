@@ -45,7 +45,6 @@ impl SymphoniaAudioSource {
         let probed = symphonia::default::get_probe().format(&hint, src, &fmt_opts, &meta_opts)?;
         let mut format = probed.format;
         
-        // Find the first audio track
         let track = format.tracks().iter().find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
             .ok_or_else(|| anyhow::anyhow!("No supported audio tracks"))?;
         let track_id = track.id;
@@ -56,21 +55,17 @@ impl SymphoniaAudioSource {
         let dec_opts: DecoderOptions = Default::default();
         let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, &dec_opts)?;
         
-        // Seek to the start position if specified
         if start_position > 0.0 {
             format.seek(symphonia::core::formats::SeekMode::Accurate, symphonia::core::formats::SeekTo::Time {
                 time: Time { seconds: start_position as u64, frac: 0.0 },
                 track_id: Some(track_id),
             })?;
             
-            // Reset the decoder after seeking
             decoder.reset();
         }
         
-        // Calculate the starting timestamp
         let start_ts = (start_position * sample_rate as f32) as u64;
         
-        // Create the source
         let mut source = Self {
             decoder,
             format,
@@ -84,8 +79,6 @@ impl SymphoniaAudioSource {
             sample_buffer: VecDeque::new(),
         };
         
-        // Prime the decoder by reading the first packet
-        // This ensures the decoder is properly initialized
         source.prime_decoder()?;
         
         Ok(source)
@@ -139,14 +132,11 @@ impl SymphoniaAudioSource {
     }
     
     fn prime_decoder(&mut self) -> Result<()> {
-        // Read the first packet to prime the decoder
         loop {
             let packet = self.format.next_packet()?;
             if packet.track_id() == self.track_id {
-                // Decode the packet to prime the decoder
                 match self.decoder.decode(&packet) {
                     Ok(decoded) => {
-                        // Convert the decoded audio to our sample buffer
                         if let Some(buffer) = Self::decode_and_buffer(decoded, self.channels) {
                             self.sample_buffer = buffer;
                             break;
@@ -169,9 +159,17 @@ impl Iterator for SymphoniaAudioSource {
     type Item = f32;
     
     fn next(&mut self) -> Option<Self::Item> {
-        // First, return any samples we have in the buffer
+        static mut SAMPLE_IDX: usize = 0;
+        let channels = self.channels as usize;
+        
         if let Some(sample) = self.sample_buffer.pop_front() {
-            self.current_ts += 1;
+            unsafe {
+                SAMPLE_IDX += 1;
+                if SAMPLE_IDX == channels {
+                    self.current_ts += 1;
+                    SAMPLE_IDX = 0;
+                }
+            }
             return Some(sample);
         }
         
@@ -215,7 +213,6 @@ impl Iterator for SymphoniaAudioSource {
                 Ok(decoded) => {
                     if let Some(buffer) = Self::decode_and_buffer(decoded, self.channels) {
                         self.sample_buffer = buffer;
-                        // Return the first sample from the new buffer
                         if let Some(sample) = self.sample_buffer.pop_front() {
                             self.current_ts += 1;
                             return Some(sample);
@@ -241,7 +238,7 @@ impl Iterator for SymphoniaAudioSource {
 
 impl Source for SymphoniaAudioSource {
     fn current_frame_len(&self) -> Option<usize> {
-        None // Streaming source
+        None
     }
     
     fn channels(&self) -> u16 {

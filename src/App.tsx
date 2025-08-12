@@ -1,21 +1,27 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, Code, Music, Volume2, ChevronDown, Key, Eye, EyeOff } from 'lucide-react';
-import { TabType, AudioDevice } from './types';
+import { Search, Plus, Code, Music, StopCircle } from 'lucide-react';
+import { TabType, AudioDevice, Hotkey } from './types';
 import { useAudio } from './hooks/useAudio';
 import { useSounds } from './hooks/useSounds';
+import { useHotkeys } from './hooks/useHotkeys';
 import { Header } from './components/Header';
 import { Navigation } from './components/Navigation';
 import { SoundCard } from './components/SoundCard';
+import { CategorySidebar } from './components/CategorySidebar';
 import { YouTubeSearch } from './components/YouTubeSearch';
 import { invoke } from '@tauri-apps/api/core';
 import { DependencyProvider } from './contexts/DependencyContext';
+import { HotkeyInput } from './components/HotkeyInput';
+import { HotkeySetting } from './components/HotkeySetting';
+import { listen } from '@tauri-apps/api/event';
+
+
 
 function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('sounds');
-  const [virtualSectionOpen, setVirtualSectionOpen] = useState(false);
-  const [outputSectionOpen, setOutputSectionOpen] = useState(false);
-  const [debugSectionOpen, setDebugSectionOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+
   const [concurrentAudio, setConcurrentAudio] = useState(true);
   const [youtubeApiKey, setYoutubeApiKey] = useState('');
   const [isLoadingApiKey, setIsLoadingApiKey] = useState(false);
@@ -24,9 +30,12 @@ function App() {
   const [showVbCablePrompt, setShowVbCablePrompt] = useState(false);
   const [vbCableInstallPressed, setVbCableInstallPressed] = useState(false);
   const [showAllOutputDevices, setShowAllOutputDevices] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'devices' | 'general' | 'hotkeys'>('devices');
 
   const {
     audioDevices,
+    getVirtualDevices,
+    getOutputDevices,
     selectedVirtualDevice,
     selectedOutputDevice,
     virtualVolume,
@@ -46,25 +55,54 @@ function App() {
   } = useAudio(showAllOutputDevices);
 
   const {
-    sounds,
+    sounds: rawSounds,
     isLoading,
     loadSounds,
     handleImportAudio,
     handleSoundVolumeChange,
     handleRemoveSound,
-    handleRemoveAllSounds,
+
     handleSetStartPosition,
     handleSetHotkey,
+    handleSetCategories,
   } = useSounds();
+  const sounds = rawSounds.map(normalizeSoundHotkey);
 
-  const filteredSounds = sounds.filter(sound =>
-    sound.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const {
+    loading: hotkeysLoading,
+    error: hotkeysError,
+    getGlobalStopHotkey,
+    reloadBindings: reloadHotkeyBindings,
+  } = useHotkeys();
 
-  // Add debug function to global scope for console access
+  const filteredSounds = sounds.filter(sound => {
+    const matchesSearch = sound.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const categoriesList = sound.categories && sound.categories.length > 0
+      ? sound.categories
+      : (sound.category ? [sound.category] : []);
+    const normalizedList = categoriesList.length > 0 ? categoriesList : ['Uncategorized'];
+    const matchesCategory = selectedCategory === 'All' || normalizedList.includes(selectedCategory);
+    return matchesSearch && matchesCategory;
+  });
+
+  const categorySet = new Set<string>();
+  for (const s of sounds) {
+    const list = s.categories && s.categories.length > 0 ? s.categories : (s.category ? [s.category] : []);
+    if (list.length === 0) categorySet.add('Uncategorized');
+    for (const c of list) categorySet.add(c || 'Uncategorized');
+  }
+  const categories = Array.from(categorySet).sort();
+  const soundCounts = categories.reduce((acc, category) => {
+    acc[category] = sounds.filter(s => {
+      const list = s.categories && s.categories.length > 0 ? s.categories : (s.category ? [s.category] : []);
+      const normalized = list.length > 0 ? list : ['Uncategorized'];
+      return normalized.includes(category);
+    }).length;
+    return acc;
+  }, {} as Record<string, number>);
+
   (window as any).debugAudioStatus = debugAudioStatus;
 
-  // Load YouTube API key on component mount
   const loadYoutubeApiKey = async () => {
     setIsLoadingApiKey(true);
     try {
@@ -77,7 +115,6 @@ function App() {
     }
   };
 
-  // Save YouTube API key
   const saveYoutubeApiKey = async () => {
     setApiKeyStatus('saving');
     try {
@@ -91,24 +128,45 @@ function App() {
     }
   };
 
-  // Load API key when settings tab is opened
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
-    if (tab === 'settings' && !youtubeApiKey && !isLoadingApiKey) {
-      loadYoutubeApiKey();
+    if (tab === 'settings') {
+      if (!youtubeApiKey && !isLoadingApiKey) {
+        loadYoutubeApiKey();
+      }
+      if (settingsTab === 'hotkeys') {
+        reloadHotkeyBindings();
+      }
     }
   };
 
-  // Load settings on component mount
   useEffect(() => {
     loadYoutubeApiKey();
     loadConcurrentAudioSetting();
     loadShowAllOutputDevicesSetting();
   }, []);
 
-  // Check for virtual devices and show VB-Cable prompt if none found
   useEffect(() => {
-    // Get all devices (not filtered) to check for virtual devices
+    const unlistenPlay = listen<string>('hotkey-play-sound', (event) => {
+      const soundId = event.payload;
+      console.log('[frontend] Received hotkey-play-sound event:', event);
+      handlePlaySound(soundId);
+    });
+
+    const unlistenStop = listen('hotkey-stop-all-sounds', (event) => {
+      console.log('[frontend] Received hotkey-stop-all-sounds event:', event);
+      handleStopAllSounds();
+    });
+
+    return () => {
+      unlistenPlay.then(f => f());
+      unlistenStop.then(f => f());
+    };
+  }, [handlePlaySound, handleStopAllSounds]);
+
+
+
+  useEffect(() => {
     const checkForVirtualDevices = async () => {
       try {
         const allDevices = await invoke<AudioDevice[]>('get_audio_devices');
@@ -117,9 +175,7 @@ function App() {
         if (virtualDevices.length === 0 && !showVbCablePrompt && !showAllOutputDevices) {
           setShowVbCablePrompt(true);
         } else if (virtualDevices.length > 0) {
-          // Reset install pressed state when virtual device is found
           setVbCableInstallPressed(false);
-          // Hide the prompt if virtual device is found
           setShowVbCablePrompt(false);
         }
       } catch (error) {
@@ -130,7 +186,6 @@ function App() {
     checkForVirtualDevices();
   }, [audioDevices, showVbCablePrompt, showAllOutputDevices]);
 
-  // Load concurrent audio setting
   const loadConcurrentAudioSetting = async () => {
     try {
       const setting = await invoke<string | null>('get_setting', { key: 'concurrent_audio' });
@@ -142,7 +197,6 @@ function App() {
     }
   };
 
-  // Save concurrent audio setting
   const saveConcurrentAudioSetting = async (value: boolean) => {
     try {
       await invoke('save_setting', { key: 'concurrent_audio', value: value.toString() });
@@ -151,13 +205,11 @@ function App() {
     }
   };
 
-  // Handle concurrent audio change
   const handleConcurrentAudioChange = (value: boolean) => {
     setConcurrentAudio(value);
     saveConcurrentAudioSetting(value);
   };
 
-  // Load show all output devices setting
   const loadShowAllOutputDevicesSetting = async () => {
     try {
       const setting = await invoke<string | null>('get_setting', { key: 'show_all_output_devices' });
@@ -169,7 +221,6 @@ function App() {
     }
   };
 
-  // Save show all output devices setting
   const saveShowAllOutputDevicesSetting = async (value: boolean) => {
     try {
       await invoke('save_setting', { key: 'show_all_output_devices', value: value.toString() });
@@ -178,13 +229,35 @@ function App() {
     }
   };
 
-  // Handle show all output devices change
   const handleShowAllOutputDevicesChange = (value: boolean) => {
     setShowAllOutputDevices(value);
     saveShowAllOutputDevicesSetting(value);
   };
 
+  useEffect(() => {
+    const unlistenPromise = listen<string>('play_sound_by_id', (event) => {
+      const soundId = event.payload;
+      if (soundId && handlePlaySound) {
+        handlePlaySound(soundId, false, true);
+      }
+    });
+    return () => {
+      unlistenPromise.then((unlisten) => unlisten());
+    };
+  }, [handlePlaySound]);
 
+  useEffect(() => {
+    console.log('[debug] Sounds:', sounds.map(s => ({ id: s.id, name: s.name, hotkey: s.hotkey })));
+  }, [sounds]);
+
+
+
+  function normalizeSoundHotkey(sound: any): any {
+    return {
+      ...sound,
+      hotkey: typeof sound.hotkey === 'string' ? undefined : sound.hotkey
+    };
+  }
 
   if (isLoading) {
     return (
@@ -201,6 +274,24 @@ function App() {
     );
   }
 
+  const globalStopHotkeyRaw = getGlobalStopHotkey();
+  const globalStopHotkey = globalStopHotkeyRaw ? parseHotkeyString(globalStopHotkeyRaw) : undefined;
+
+  function parseHotkeyString(hotkey: string): Hotkey {
+    const parts = hotkey.split('+');
+    const mods = { ctrl: false, alt: false, shift: false, meta: false };
+    let key = '';
+    for (const part of parts) {
+      const p = part.toLowerCase();
+      if (p === 'ctrl') mods.ctrl = true;
+      else if (p === 'alt') mods.alt = true;
+      else if (p === 'shift') mods.shift = true;
+      else if (p === 'meta' || p === 'cmd' || p === 'win') mods.meta = true;
+      else key = part;
+    }
+    return { key, modifiers: mods };
+  }
+
   return (
     <DependencyProvider>
       <div className="min-h-screen" style={{ background: 'rgba(10,13,19,0.98)' }}>
@@ -212,7 +303,6 @@ function App() {
           onStopAllSounds={handleStopAllSounds}
         />
         
-        {/* VB-Cable Installation Prompt */}
         {showVbCablePrompt && (
           <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-4 mx-6 mt-4">
             <div className="flex items-start space-x-3">
@@ -282,13 +372,22 @@ function App() {
         
         <Navigation activeTab={activeTab} onTabChange={handleTabChange} />
 
-        {/* Main Content */}
-        <main className="container mx-auto px-6 py-8" style={{ background: 'rgba(10,13,19,0.98)' }}>
+        <main className="flex h-screen pt-0" style={{ background: 'rgba(10,13,19,0.98)' }}>
           {activeTab === 'sounds' && (
-            <div className="space-y-8 fade-in">
-              {/* Sounds Container */}
-              <div style={{ background: 'rgba(10, 13, 19, 0.98)', borderRadius: '1rem', padding: '1rem' }}>
-                {/* Search and Import */}
+            <div className="flex w-full">
+              <CategorySidebar
+                categories={categories}
+                selectedCategory={selectedCategory}
+                onCategorySelect={setSelectedCategory}
+                soundCounts={soundCounts}
+                onCreateCategory={(categoryName) => {
+                  setSelectedCategory(categoryName);
+                }}
+              />
+              <div className="flex-1 overflow-y-auto">
+                <div className="container mx-auto px-6 py-8">
+                  <div className="space-y-8 fade-in">
+                    <div style={{ background: 'rgba(10, 13, 19, 0.98)', borderRadius: '1rem', padding: '1rem' }}>
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center space-x-4 flex-1 max-w-md">
                     <div className="relative flex-1">
@@ -316,12 +415,17 @@ function App() {
                         Import audio
                       </div>
                     </div>
-
+                    <button
+                      onClick={handleStopAllSounds}
+                      className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg transition-colors duration-200"
+                      title="Stop All Sounds"
+                    >
+                      <StopCircle className="h-5 w-5" />
+                    </button>
                   </div>
                 </div>
 
 
-                {/* Sounds Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredSounds.map((sound, index) => (
                   <SoundCard
@@ -335,7 +439,12 @@ function App() {
                     onRemove={handleRemoveSound}
                     onPlayLocal={(soundId) => handlePlaySound(soundId, true, concurrentAudio)}
                     onSetStartPosition={handleSetStartPosition}
-                    onSetHotkey={handleSetHotkey}
+                    onSetHotkey={(soundId, hotkey) => {
+                      if (typeof hotkey === 'string') return;
+                      handleSetHotkey(soundId, hotkey);
+                    }}
+                    onSetCategories={handleSetCategories}
+                    availableCategories={categories}
                     onSeek={handleSeekSound}
                     getPlaybackPosition={getPlaybackPosition}
                     index={index}
@@ -357,310 +466,235 @@ function App() {
                   </p>
                 </div>
               )}
+                    </div>
+                  </div>
                 </div>
               </div>
+            </div>
           )}
 
           {activeTab === 'youtube' && (
-            <div className="space-y-8 fade-in">
-              <YouTubeSearch hasApiKey={!!youtubeApiKey} onSoundAdded={loadSounds} />
+            <div className="container mx-auto px-6 py-8">
+              <div className="space-y-8 fade-in">
+                <YouTubeSearch hasApiKey={!!youtubeApiKey} onSoundAdded={loadSounds} />
+              </div>
             </div>
           )}
 
           {activeTab === 'settings' && (
-            <div className="space-y-8 max-w-2xl fade-in">
-              <h2 className="text-xl font-semibold font-mono">Audio Settings</h2>
-              
-              {/* Concurrent Audio Setting */}
-              <div className="space-y-4">
-                <div className="flex items-center space-x-3 p-4 bg-gray-900 border border-gray-800 rounded-lg">
-                  <Music className="h-5 w-5 text-gray-400" />
-                  <span className="font-mono text-sm">Playback Settings</span>
-                </div>
-                
-                <div className="space-y-4 p-4 bg-gray-900/50 border border-gray-800 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium font-mono">Concurrent Audio</label>
-                      <p className="text-xs text-gray-400 font-mono">
-                        Allow multiple sounds to play simultaneously
-                      </p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={concurrentAudio}
-                        onChange={(e) => handleConcurrentAudioChange(e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-                </div>
+            <div className="container mx-auto px-6 py-8">
+              <div className="space-y-8 max-w-2xl fade-in">
+              <div className="flex space-x-4 mb-6">
+                <button onClick={() => setSettingsTab('devices')} className={`px-4 py-2 rounded font-mono text-sm ${settingsTab === 'devices' ? 'bg-blue-700 text-white' : 'bg-gray-800 text-gray-300'}`}>Devices</button>
+                <button onClick={() => setSettingsTab('general')} className={`px-4 py-2 rounded font-mono text-sm ${settingsTab === 'general' ? 'bg-blue-700 text-white' : 'bg-gray-800 text-gray-300'}`}>General</button>
+                <button onClick={() => {
+                  setSettingsTab('hotkeys');
+                  reloadHotkeyBindings();
+                }} className={`px-4 py-2 rounded font-mono text-sm ${settingsTab === 'hotkeys' ? 'bg-blue-700 text-white' : 'bg-gray-800 text-gray-300'}`}>Hotkeys</button>
               </div>
-              
-              {/* Output Device Section */}
-              <div className="space-y-4">
-                <button
-                  onClick={() => setOutputSectionOpen(!outputSectionOpen)}
-                  className="flex items-center justify-between w-full p-4 bg-gray-900 border border-gray-800 rounded-lg hover:bg-gray-800 transition-colors duration-200"
-                >
-                  <div className="flex items-center space-x-3">
-                    <Volume2 className="h-5 w-5 text-gray-400" />
-                    <span className="font-mono text-sm">Output Device</span>
-                  </div>
-                  <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-300 ${outputSectionOpen ? 'rotate-180' : ''}`} />
-                </button>
-                
-                <div 
-                  className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                    outputSectionOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
-                  }`}
-                >
-                  <div className="space-y-4 p-4 bg-gray-900/50 border border-gray-800 rounded-lg">
-                    {/* Output Device Selection */}
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium font-mono">Device</label>
+              {settingsTab === 'devices' && (
+                <>
+                  <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800 space-y-4">
+                    <h3 className="text-lg font-mono font-semibold mb-2">Output Device</h3>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="font-mono text-sm text-gray-300">Select Output Device</span>
                       <select
                         value={selectedOutputDevice}
-                        onChange={(e) => handleOutputDeviceChange(e.target.value)}
-                        className="input-modern w-full"
+                        onChange={e => handleOutputDeviceChange(e.target.value)}
+                        className="rounded border-gray-600 bg-gray-700 text-white px-2 py-1"
                       >
-                        {audioDevices.filter(d => d.device_type === 'output').map((device) => (
-                          <option key={device.name} value={device.name}>
-                            {device.name} {device.is_default ? '(Default)' : ''}
-                          </option>
+                        {getOutputDevices().map(device => (
+                          <option key={device.name} value={device.name}>{device.name}</option>
                         ))}
                       </select>
-                      <p className="text-xs text-gray-400 font-mono">
-                        Select the speaker/headphone device for output
-                      </p>
                     </div>
-
-                    {/* Output Volume */}
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium font-mono">Volume</label>
-                      <div className="flex items-center space-x-4">
+                    <div className="py-2">
+                      <label className="block font-mono text-sm text-gray-300 mb-1">Output Volume</label>
+                      <div className="flex items-center gap-2">
                         <input
                           type="range"
-                          min="0"
-                          max="1"
-                          step="0.01"
+                          min={0}
+                          max={1}
+                          step={0.01}
                           value={outputVolume}
-                          onChange={(e) => handleOutputVolumeChange(parseFloat(e.target.value))}
-                          className="flex-1 accent-white"
+                          onChange={e => handleOutputVolumeChange(parseFloat(e.target.value))}
+                          className="w-full accent-white h-2 rounded-lg appearance-none bg-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          style={{ accentColor: 'white' }}
                         />
-                        <span className="text-sm text-gray-400 w-12 font-mono">
-                          {Math.round(outputVolume * 100)}%
-                        </span>
+                        <span className="font-mono text-xs text-gray-100 min-w-[32px] text-right">{Math.round(outputVolume * 100)}%</span>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
-
-
-
-              {/* Advanced Settings Section */}
-              <div className="space-y-4">
-                <button
-                  onClick={() => setVirtualSectionOpen(!virtualSectionOpen)}
-                  className="flex items-center justify-between w-full p-4 bg-gray-900 border border-gray-800 rounded-lg hover:bg-gray-800 transition-colors duration-200"
-                >
-                  <div className="flex items-center space-x-3">
-                    <Music className="h-5 w-5 text-gray-400" />
-                    <span className="font-mono text-sm">Advanced Settings</span>
-                    <span className="bg-orange-600 text-white text-xs px-2 py-1 rounded font-mono">Advanced</span>
-                  </div>
-                  <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-300 ${virtualSectionOpen ? 'rotate-180' : ''}`} />
-                </button>
-                
-                <div 
-                  className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                    virtualSectionOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
-                  }`}
-                >
-                  <div className="space-y-4 p-4 bg-gray-900/50 border border-gray-800 rounded-lg">
-                    {/* Virtual Cable Settings */}
-                    <div className="space-y-4">
-                      <div className="flex items-center space-x-2">
-                        <Music className="h-4 w-4 text-gray-400" />
-                        <span className="text-sm font-medium font-mono">Virtual Cable</span>
-                      </div>
-                      
-                      {/* Virtual Device Selection */}
-                      <div className="space-y-3">
-                        <label className="text-sm font-medium font-mono">Device</label>
+                  <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800 space-y-4">
+                    <h3 className="text-lg font-mono font-semibold mb-2">Virtual Device</h3>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="font-mono text-sm text-gray-300">Select Virtual Device</span>
                       <select
                         value={selectedVirtualDevice}
-                        onChange={(e) => handleVirtualDeviceChange(e.target.value)}
-                        className="input-modern w-full"
+                        onChange={e => handleVirtualDeviceChange(e.target.value)}
+                        className="rounded border-gray-600 bg-gray-700 text-white px-2 py-1"
                       >
-                        {audioDevices.filter(d => d.device_type === 'virtual').map((device) => (
-                          <option key={device.name} value={device.name}>
-                            {device.name} {device.is_default ? '(Default)' : ''}
-                          </option>
+                        {getVirtualDevices().map(device => (
+                          <option key={device.name} value={device.name}>{device.name}</option>
                         ))}
                       </select>
-                      <p className="text-xs text-gray-400 font-mono">
-                        Select the virtual audio device for mixing
-                      </p>
                     </div>
-
-                    {/* Virtual Volume */}
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium font-mono">Volume</label>
-                      <div className="flex items-center space-x-4">
+                    <div className="py-2">
+                      <label className="block font-mono text-sm text-gray-300 mb-1">Virtual Volume</label>
+                      <div className="flex items-center gap-2">
                         <input
                           type="range"
-                          min="0"
-                          max="1"
-                          step="0.01"
+                          min={0}
+                          max={1}
+                          step={0.01}
                           value={virtualVolume}
-                          onChange={(e) => handleVirtualVolumeChange(parseFloat(e.target.value))}
-                          className="flex-1 accent-white"
+                          onChange={e => handleVirtualVolumeChange(parseFloat(e.target.value))}
+                          className="w-full accent-white h-2 rounded-lg appearance-none bg-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          style={{ accentColor: 'white' }}
                         />
-                        <span className="text-sm text-gray-400 w-12 font-mono">
-                          {Math.round(virtualVolume * 100)}%
-                        </span>
+                        <span className="font-mono text-xs text-gray-100 min-w-[32px] text-right">{Math.round(virtualVolume * 100)}%</span>
                       </div>
                     </div>
                   </div>
-
-
-                  </div>
-                </div>
-              </div>
-
-              {/* YouTube API Key Section */}
-              <div className="space-y-4">
-                <div className="flex items-center space-x-3 p-4 bg-gray-900 border border-gray-800 rounded-lg">
-                  <Key className="h-5 w-5 text-gray-400" />
-                  <span className="font-mono text-sm">YouTube API</span>
-                </div>
-                
-                <div className="space-y-4 p-4 bg-gray-900/50 border border-gray-800 rounded-lg">
-                  <div className="space-y-3">
-                    <label className="text-sm font-medium font-mono">API Key</label>
-                    <div className="relative">
+                </>
+              )}
+              {settingsTab === 'general' && (
+                <>
+                  <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800 space-y-4">
+                    <h3 className="text-lg font-mono font-semibold mb-2">YouTube API Key</h3>
+                    <div className="flex items-center gap-2">
                       <input
-                        type={showApiKey ? "text" : "password"}
+                        type={showApiKey ? 'text' : 'password'}
                         value={youtubeApiKey}
-                        onChange={(e) => setYoutubeApiKey(e.target.value)}
-                        placeholder="Enter your YouTube Data API v3 key"
-                        className="input-modern w-full pr-10"
+                        onChange={e => setYoutubeApiKey(e.target.value)}
+                        className="flex-1 px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded font-mono"
+                        placeholder="Enter YouTube API Key"
                       />
                       <button
                         type="button"
                         onClick={() => setShowApiKey(!showApiKey)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors"
-                        title={showApiKey ? "Hide API key" : "Show API key"}
+                        className="text-xs text-gray-400 hover:text-gray-300"
                       >
-                        {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showApiKey ? 'Hide' : 'Show'}
                       </button>
-                    </div>
-                    <div className="flex space-x-2">
                       <button
                         onClick={saveYoutubeApiKey}
                         disabled={isLoadingApiKey || apiKeyStatus === 'saving'}
-                        className={`px-4 py-2 rounded-lg font-mono text-sm transition-colors duration-200 ${
-                          apiKeyStatus === 'saving' || isLoadingApiKey
-                            ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                            : 'bg-blue-600 hover:bg-blue-700 text-white'
-                        }`}
+                        className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded font-mono"
                       >
-                        {apiKeyStatus === 'saving' ? 'Saving...' : 'Save API Key'}
+                        Save
                       </button>
-                      
-                      {apiKeyStatus === 'success' && (
-                        <span className="text-green-400 text-sm font-mono">✓ Saved successfully</span>
-                      )}
-                      {apiKeyStatus === 'error' && (
-                        <span className="text-red-400 text-sm font-mono">✗ Failed to save</span>
-                      )}
                     </div>
-                    <p className="text-xs text-gray-400 font-mono">
-                      Required for YouTube video search functionality. Get your API key from the <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Google Cloud Console</a>.
-                    </p>
+                    {apiKeyStatus === 'success' && <span className="text-green-400 text-xs font-mono">Saved!</span>}
+                    {apiKeyStatus === 'error' && <span className="text-red-400 text-xs font-mono">Failed to save</span>}
                   </div>
-                </div>
-              </div>
-
-              {/* Data Management Section */}
-              <div className="space-y-4">
-                <div className="flex items-center space-x-3 p-4 bg-gray-900 border border-gray-800 rounded-lg">
-                  <span className="text-red-400 font-mono text-sm">⚠️</span>
-                  <span className="font-mono text-sm">Data Management</span>
-                </div>
-                
-                <div className="space-y-4 p-4 bg-gray-900/50 border border-gray-800 rounded-lg">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium font-mono text-red-400">Remove All Sounds</label>
-                        <p className="text-xs text-gray-400 font-mono">
-                          Permanently delete all audio files from your soundboard. This action cannot be undone.
-                        </p>
+                  <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800 space-y-4">
+                    <h3 className="text-lg font-mono font-semibold mb-2">General Settings</h3>
+                    <div className="flex flex-col gap-3">
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={concurrentAudio}
+                          onChange={e => handleConcurrentAudioChange(e.target.checked)}
+                          className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
+                        />
+                        <span className="text-gray-300 text-sm font-mono">Allow concurrent audio (multiple sounds at once)</span>
+                      </label>
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={showAllOutputDevices}
+                          onChange={e => handleShowAllOutputDevicesChange(e.target.checked)}
+                          className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
+                        />
+                        <span className="text-gray-300 text-sm font-mono">Show all output devices</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800 space-y-4">
+                    <h3 className="text-lg font-mono font-semibold mb-2">Debug</h3>
+                    <button
+                      onClick={debugAudioStatus}
+                      className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded font-mono"
+                    >
+                      Debug Audio Status
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await invoke('test_hotkey', { hotkey: 'Ctrl+1' });
+                        } catch (error) {
+                          console.error('Failed to test hotkey:', error);
+                        }
+                      }}
+                      className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded font-mono"
+                    >
+                      Test Hotkey (Ctrl+1)
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const result = await invoke('update_yt_dlp');
+                          console.log('yt-dlp update result:', result);
+                          alert('yt-dlp updated successfully!');
+                        } catch (error) {
+                          console.error('Failed to update yt-dlp:', error);
+                          alert(`Failed to update yt-dlp: ${error}`);
+                        }
+                      }}
+                      className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded font-mono"
+                    >
+                      Update yt-dlp
+                    </button>
+                  </div>
+                </>
+              )}
+              {settingsTab === 'hotkeys' && (
+                <>
+                  <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800 space-y-4">
+                    <h3 className="text-lg font-mono font-semibold mb-2">Hotkeys</h3>
+                    {hotkeysError && (
+                      <div className="text-red-400 text-sm font-mono">
+                        Error: {hotkeysError}
                       </div>
-                      <button
-                        onClick={handleRemoveAllSounds}
-                        className="bg-red-700 hover:bg-red-800 text-white px-4 py-2 rounded-lg font-mono text-sm transition-colors duration-200"
-                      >
-                        Remove All
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Debug Section */}
-              <div className="space-y-4">
-                <button
-                  onClick={() => setDebugSectionOpen(!debugSectionOpen)}
-                  className="flex items-center justify-between w-full p-4 bg-gray-900 border border-gray-800 rounded-lg hover:bg-gray-800 transition-colors duration-200"
-                >
-                  <div className="flex items-center space-x-3">
-                    <Code className="h-5 w-5 text-gray-400" />
-                    <span className="font-mono text-sm">Debug</span>
-                    <span className="bg-red-600 text-white text-xs px-2 py-1 rounded font-mono">Developer</span>
-                  </div>
-                  <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-300 ${debugSectionOpen ? 'rotate-180' : ''}`} />
-                </button>
-                
-                <div 
-                  className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                    debugSectionOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
-                  }`}
-                >
-                  <div className="space-y-4 p-4 bg-gray-900/50 border border-gray-800 rounded-lg">
-                    <div className="space-y-2">
-                      <button
-                        onClick={debugAudioStatus}
-                        className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-mono text-sm transition-colors"
-                      >
-                        Debug Audio Status
-                      </button>
-                      <button
-                        onClick={async () => {
+                    )}
+                    {hotkeysLoading && (
+                      <div className="text-gray-400 text-sm font-mono">
+                        Loading hotkeys...
+                      </div>
+                    )}
+                    <div className="space-y-3">
+                      <HotkeySetting
+                        currentHotkey={globalStopHotkey}
+                        onHotkeyChange={async (hotkey: Hotkey | null) => {
+                          if (!hotkey) return;
                           try {
-                            const result = await invoke('list_all_devices');
-                            console.log('All audio devices:', result);
-                            alert('Device list logged to console. Check the developer console for details.');
-                          } catch (error) {
-                            console.error('Failed to list devices:', error);
-                            alert(`Failed to list devices: ${error}`);
+                            await invoke('register_global_stop_hotkey', { key: hotkey.key, modifiers: hotkey.modifiers });
+                          } catch (e) {
+
                           }
                         }}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-mono text-sm transition-colors"
-                      >
-                        List All Devices
-                      </button>
+                      />
                     </div>
-                    <p className="text-xs text-gray-400 font-mono">
-                      Check the console for detailed audio system information
-                    </p>
+                    <div className="mt-6">
+                      <h4 className="font-mono text-base font-semibold mb-2">Sound Hotkeys</h4>
+                      <div className="divide-y divide-gray-800">
+                        {sounds.map(sound => (
+                          <div key={sound.id} className="flex items-center py-2 gap-3">
+                            <span className="flex-1 truncate font-mono text-xs text-gray-400">{sound.name}</span>
+                            <div style={{ minWidth: 0, flexShrink: 0 }}>
+                              <HotkeyInput
+                                value={typeof sound.hotkey === 'string' ? undefined : sound.hotkey}
+                                onChange={(hotkey: Hotkey) => handleSetHotkey(sound.id, hotkey)}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                </>
+              )}
               </div>
             </div>
           )}

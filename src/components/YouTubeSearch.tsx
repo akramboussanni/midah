@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Search, X, Loader2, AlertCircle, Key, Download, CheckCircle } from 'lucide-react';
+import { Search, X, Loader2, AlertCircle, Key, Download, CheckCircle, HelpCircle, RefreshCw } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import { VideoCard } from './VideoCard';
 import { useYouTube } from '../hooks/useYouTube';
 import { useDependencies } from '../contexts/DependencyContext';
@@ -11,6 +12,8 @@ interface YouTubeSearchProps {
 
 export const YouTubeSearch = ({ hasApiKey = true, onSoundAdded }: YouTubeSearchProps) => {
   const [searchInput, setSearchInput] = useState('');
+  const [showTroubleshootDialog, setShowTroubleshootDialog] = useState(false);
+  const [isUpdatingYtDlp, setIsUpdatingYtDlp] = useState(false);
   
   const {
     dependencies,
@@ -42,14 +45,11 @@ export const YouTubeSearch = ({ hasApiKey = true, onSoundAdded }: YouTubeSearchP
     resetDownloadState,
   } = useYouTube(onSoundAdded);
 
-  // Check dependencies when component mounts (first time YouTube tab is opened)
+
   useEffect(() => {
     checkDependenciesIfNeeded();
   }, [checkDependenciesIfNeeded]);
 
-
-
-  // Helper function to detect YouTube URLs
   const isYouTubeUrl = (input: string): boolean => {
     return input.includes('youtube.com') || input.includes('youtu.be');
   };
@@ -81,7 +81,21 @@ export const YouTubeSearch = ({ hasApiKey = true, onSoundAdded }: YouTubeSearchP
     await downloadDependencies();
   };
 
-  // Show dependency download prompt if dependencies are missing
+  const handleUpdateYtDlp = async () => {
+    setIsUpdatingYtDlp(true);
+    try {
+      await invoke('update_yt_dlp');
+      setTimeout(() => {
+        checkDependencies();
+      }, 1000);
+    } catch (error) {
+      console.error('Failed to update yt-dlp:', error);
+    } finally {
+      setIsUpdatingYtDlp(false);
+    }
+  };
+
+
   const [showSuccess, setShowSuccess] = useState(false);
   useEffect(() => {
     if (justDownloaded && areAllDependenciesAvailable()) {
@@ -187,7 +201,7 @@ export const YouTubeSearch = ({ hasApiKey = true, onSoundAdded }: YouTubeSearchP
     );
   }
 
-  // Show loading state while checking dependencies
+
   if (isChecking || (!hasCheckedDependencies && !dependencies)) {
     return (
       <div className="space-y-6">
@@ -216,7 +230,7 @@ export const YouTubeSearch = ({ hasApiKey = true, onSoundAdded }: YouTubeSearchP
     );
   }
 
-  // Show error state if dependency check failed completely
+
   if (!isChecking && !dependencies && dependencyError) {
     return (
       <div className="space-y-6">
@@ -246,7 +260,7 @@ export const YouTubeSearch = ({ hasApiKey = true, onSoundAdded }: YouTubeSearchP
 
   return (
     <div className="space-y-6">
-      {/* API Key Warning */}
+
       {!hasApiKey && (
         <div className="max-w-2xl mx-auto">
           <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-4 flex items-start space-x-3">
@@ -269,12 +283,21 @@ export const YouTubeSearch = ({ hasApiKey = true, onSoundAdded }: YouTubeSearchP
         </div>
       )}
 
-      {/* Search Section */}
+
       <div className="max-w-4xl mx-auto">
         <div className="rounded-lg p-6 shadow-lg border border-gray-700" style={{ background: '#090b10' }}>
-          <h2 className="text-xl font-semibold text-white mb-4">Search YouTube Videos</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-white">Search YouTube Videos</h2>
+            <button
+              onClick={() => setShowTroubleshootDialog(true)}
+              className="flex items-center space-x-2 text-gray-400 hover:text-gray-300 text-sm transition-colors"
+            >
+              <HelpCircle className="h-4 w-4" />
+              <span>Not Working?</span>
+            </button>
+          </div>
           
-          {/* Search Input */}
+
           <div className="relative mb-6">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
             <input
@@ -311,7 +334,7 @@ export const YouTubeSearch = ({ hasApiKey = true, onSoundAdded }: YouTubeSearchP
         </div>
       </div>
 
-      {/* Error Display */}
+
       {error && (
         <div className="max-w-2xl mx-auto">
           <div className="bg-black border border-gray-600 rounded-lg p-4 flex items-start space-x-3">
@@ -330,10 +353,10 @@ export const YouTubeSearch = ({ hasApiKey = true, onSoundAdded }: YouTubeSearchP
         </div>
       )}
 
-      {/* Search Results */}
+
       {searchResults.length > 0 && (
         <div className="space-y-6 youtube-search-results search-results-container">
-          {/* Results Header */}
+
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <h3 className="text-lg font-medium text-white">
@@ -348,7 +371,7 @@ export const YouTubeSearch = ({ hasApiKey = true, onSoundAdded }: YouTubeSearchP
             </p>
           </div>
 
-          {/* Videos Grid */}
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {searchResults.map((video) => (
               <div key={video.id} className="video-card">
@@ -364,7 +387,7 @@ export const YouTubeSearch = ({ hasApiKey = true, onSoundAdded }: YouTubeSearchP
             ))}
           </div>
 
-          {/* Load More Button */}
+
           {nextPageToken && (
             <div className="text-center mt-8">
               <button
@@ -379,7 +402,7 @@ export const YouTubeSearch = ({ hasApiKey = true, onSoundAdded }: YouTubeSearchP
         </div>
       )}
 
-      {/* Empty State */}
+
       {!isSearching && searchResults.length === 0 && searchInput && !error && hasApiKey && (
         <div className="text-center py-16">
           <div className="relative inline-block mb-6">
@@ -394,7 +417,7 @@ export const YouTubeSearch = ({ hasApiKey = true, onSoundAdded }: YouTubeSearchP
         </div>
       )}
 
-      {/* Initial State */}
+
       {!isSearching && searchResults.length === 0 && !searchInput && hasApiKey && (
         <div className="text-center py-16">
           <div className="relative inline-block mb-6">
@@ -409,7 +432,7 @@ export const YouTubeSearch = ({ hasApiKey = true, onSoundAdded }: YouTubeSearchP
         </div>
       )}
 
-      {/* Loading State */}
+
       {isSearching && searchResults.length === 0 && (
         <div className="text-center py-16">
           <div className="relative inline-block mb-6">
@@ -421,6 +444,70 @@ export const YouTubeSearch = ({ hasApiKey = true, onSoundAdded }: YouTubeSearchP
           <p className="text-gray-400 text-sm">
             {isYouTubeUrl(searchInput) ? 'Getting video information...' : `Finding videos for "${searchInput}"`}
           </p>
+        </div>
+      )}
+
+      {showTroubleshootDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-md w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">YouTube Download Issues?</h3>
+              <button
+                onClick={() => setShowTroubleshootDialog(false)}
+                className="text-gray-400 hover:text-gray-300 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="text-gray-300 text-sm space-y-3">
+                <p>If YouTube downloads are failing, try these solutions:</p>
+                
+                <div className="space-y-2">
+                  <div className="flex items-start space-x-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full mt-2 flex-shrink-0"></div>
+                    <span><strong>Outdated yt-dlp:</strong> YouTube frequently changes their API. Update yt-dlp to the latest version.</span>
+                  </div>
+                  
+                  <div className="flex items-start space-x-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full mt-2 flex-shrink-0"></div>
+                    <span><strong>Network issues:</strong> Check your internet connection and try again.</span>
+                  </div>
+                  
+                  <div className="flex items-start space-x-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full mt-2 flex-shrink-0"></div>
+                    <span><strong>Video restrictions:</strong> Some videos may be region-locked or age-restricted.</span>
+                  </div>
+                  
+                  <div className="flex items-start space-x-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full mt-2 flex-shrink-0"></div>
+                    <span><strong>Private/unavailable videos:</strong> Ensure the video is public and still available.</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="border-t border-gray-700 pt-4">
+                <button
+                  onClick={handleUpdateYtDlp}
+                  disabled={isUpdatingYtDlp}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                >
+                  {isUpdatingYtDlp ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Updating yt-dlp...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4" />
+                      <span>Update yt-dlp</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

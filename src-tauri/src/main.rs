@@ -5,138 +5,19 @@ mod audio;
 mod external;
 mod database;
 mod soundboard;
+mod hotkeys;
+mod app_handlers;
 
 use external::*;
 
-use tauri::Manager;
+use tauri::{Manager, Emitter};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use std::sync::Arc;
-use external::dependencies::DependencyManager;
 
-static DEPENDENCY_MANAGER: std::sync::OnceLock<Arc<DependencyManager>> = std::sync::OnceLock::new();
+use std::sync::Mutex;
+use crate::hotkeys::{init_hotkeys, HotkeyAction};
 
-fn get_dependency_manager() -> Result<Arc<DependencyManager>, String> {
-    DEPENDENCY_MANAGER.get_or_init(|| {
-        DependencyManager::new()
-            .map(Arc::new)
-            .expect("Failed to initialize dependency manager")
-    });
-    Ok(DEPENDENCY_MANAGER.get().unwrap().clone())
-}
 
-#[tauri::command]
-async fn get_app_data_dir(app: tauri::AppHandle) -> Result<String, String> {
-    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    Ok(app_data_dir.to_string_lossy().to_string())
-}
 
-#[tauri::command]
-async fn create_directory(path: String) -> Result<(), String> {
-    std::fs::create_dir_all(&path)
-        .map_err(|e| format!("Failed to create directory: {}", e))
-}
-
-#[tauri::command]
-async fn save_setting(key: String, value: String) -> Result<(), String> {
-    database::save_setting(&key, &value)
-        .map_err(|e| format!("Failed to save setting: {}", e))
-}
-
-#[tauri::command]
-async fn get_setting(key: String) -> Result<Option<String>, String> {
-    database::get_setting(&key)
-        .map_err(|e| format!("Failed to get setting: {}", e))
-}
-
-#[tauri::command]
-async fn minimize_window(window: tauri::Window) -> Result<(), String> {
-    window.minimize().map_err(|e| format!("Failed to minimize window: {}", e))
-}
-
-#[tauri::command]
-async fn close_window(window: tauri::Window) -> Result<(), String> {
-    window.close().map_err(|e| format!("Failed to close window: {}", e))
-}
-
-#[tauri::command]
-async fn toggle_maximize(window: tauri::Window) -> Result<(), String> {
-    if window.is_maximized().unwrap_or(false) {
-        window.unmaximize().map_err(|e| format!("Failed to unmaximize window: {}", e))
-    } else {
-        window.maximize().map_err(|e| format!("Failed to maximize window: {}", e))
-    }
-}
-
-#[tauri::command]
-async fn get_app_version() -> Result<String, String> {
-    Ok(env!("CARGO_PKG_VERSION").to_string())
-}
-
-async fn process_dependency<F, Fut>(
-    app_handle: tauri::AppHandle,
-    dep_manager: Arc<external::dependencies::DependencyManager>,
-    dep_type: external::dependencies::DependencyType, 
-    operation: F,
-    result: &mut serde_json::Map<String, serde_json::Value>
-) 
-where
-    F: FnOnce(tauri::AppHandle, Arc<external::dependencies::DependencyManager>, external::dependencies::DependencyType) -> Fut + 'static,
-    Fut: std::future::Future<Output = Result<std::path::PathBuf, String>> + 'static,
-{
-    match operation(app_handle, dep_manager, dep_type).await {
-        Ok(path) => {
-            result.insert(dep_type.name().to_string(), serde_json::json!({
-                "available": true,
-                "path": path.to_string_lossy().to_string()
-            }));
-        }
-        Err(e) => {
-            result.insert(dep_type.name().to_string(), serde_json::json!({
-                "available": false,
-                "error": e.to_string()
-            }));
-        }
-    }
-}
-
-#[tauri::command]
-async fn check_dependencies(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    use external::dependencies::DependencyType;
-    
-    println!("Starting dependency check...");
-    
-    let dep_manager = get_dependency_manager()?;
-    let mut result = serde_json::Map::new();
-    
-    for dep_type in [DependencyType::YtDlp, DependencyType::Ffmpeg] {
-        println!("Checking dependency: {}", dep_type.name());
-        process_dependency(app.clone(), dep_manager.clone(), dep_type, |app_handle, dm, dep_type| async move {
-            dm.find_dependency(&app_handle, dep_type).await
-                .map_err(|e| e.to_string())
-        }, &mut result).await;
-    }
-    
-    println!("Dependency check result: {:?}", result);
-    Ok(serde_json::Value::Object(result))
-}
-
-#[tauri::command]
-async fn download_dependencies(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    use external::dependencies::DependencyType;
-    
-    let dep_manager = get_dependency_manager()?;
-    let mut result = serde_json::Map::new();
-    
-    process_dependency(app.clone(), dep_manager.clone(), DependencyType::YtDlp, |app_handle, dm, dep_type| async move { 
-        dm.ensure_dependency(&app_handle, dep_type).await.map_err(|e| e.to_string()) 
-    }, &mut result).await;
-    
-    process_dependency(app.clone(), dep_manager.clone(), DependencyType::Ffmpeg, |app_handle, dm, dep_type| async move { 
-        dm.ensure_dependency(&app_handle, dep_type).await.map_err(|e| e.to_string()) 
-    }, &mut result).await;
-    
-    Ok(serde_json::Value::Object(result))
-}
 
 fn main() {
     tracing_subscriber::registry()
@@ -151,17 +32,36 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .manage(std::sync::Mutex::new(audio::AudioManager::new().expect("Failed to initialize AudioManager")))
-        .setup(|app| {
+        .manage(Mutex::new(audio::AudioManager::new().expect("Failed to initialize AudioManager")))
+        .setup(move |app| {
             let db_path = app.path().app_data_dir().unwrap().join("soundboard.db");
             database::init_database(&db_path)?;
-
             let youtube_api_key = database::get_setting("youtube_api_key")
                 .unwrap_or_else(|_| None)
                 .unwrap_or_else(|| String::new());
             external::youtube::init_youtube_service(youtube_api_key)?;
 
-            println!("Tauri app initialized successfully!");
+            let mut event_receiver = init_hotkeys();
+
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                loop {
+                    if let Some(action) = event_receiver.blocking_recv() {
+                        match action {
+                            HotkeyAction::PlaySound { sound_id } => {
+                                let _ = crate::soundboard::play_sound(sound_id.clone(), app_handle.state::<std::sync::Mutex<audio::AudioManager>>());
+                                let _ = app_handle.emit("hotkey-play-sound", sound_id);
+                            }
+                            HotkeyAction::StopAllSounds => {
+                                let _ = crate::soundboard::stop_all_sounds();
+                                let _ = app_handle.emit("hotkey-stop-all-sounds", ());
+                            }
+                        }
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -196,20 +96,30 @@ fn main() {
             soundboard::update_sound_volume,
             soundboard::update_sound_hotkey,
             soundboard::update_sound_category,
+            soundboard::update_sound_categories,
             soundboard::play_sound_local,
             soundboard::update_sound_start_position,
             soundboard::get_playing_sounds,
             soundboard::seek_sound,
-            get_app_data_dir,
-            create_directory,
-            save_setting,
-            get_setting,
-            minimize_window,
-            close_window,
-            toggle_maximize,
-            get_app_version,
-            check_dependencies,
-            download_dependencies,
+            hotkeys::register_hotkey,
+            hotkeys::unregister_hotkey,
+            hotkeys::update_hotkey,
+            hotkeys::get_hotkey_bindings,
+            hotkeys::register_global_stop_hotkey,
+            hotkeys::unregister_global_stop_hotkey,
+            app_handlers::get_app_data_dir,
+            app_handlers::create_directory,
+            app_handlers::save_setting,
+            app_handlers::get_setting,
+            app_handlers::minimize_window,
+            app_handlers::close_window,
+            app_handlers::toggle_maximize,
+            app_handlers::get_app_version,
+            app_handlers::register_global_shortcut,
+            app_handlers::test_hotkey,
+            app_handlers::check_dependencies,
+            app_handlers::download_dependencies,
+            app_handlers::update_yt_dlp,
             external::vbcable::check_virtual_cable,
             external::vbcable::install_virtual_cable,
             external::youtube::search_videos,
@@ -224,3 +134,5 @@ fn main() {
         .run(|_app_handle, _event| {
         });
 }
+
+

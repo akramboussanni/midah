@@ -20,7 +20,7 @@ export const Header = ({
   const [isMaximized, setIsMaximized] = useState(false);
   const [appVersion, setAppVersion] = useState<string>('0.1.0');
 
-  // Fetch app version on component mount
+
   useEffect(() => {
     const fetchVersion = async () => {
       try {
@@ -60,8 +60,8 @@ export const Header = ({
   };
 
   return (
-    <header className="glass border-b border-gray-800 sticky top-0 z-50" style={{ background: '#090b10' }}>
-      {/* Title Bar - Draggable */}
+    <header className="glass border-b border-gray-800 sticky top-0 z-50" style={{ background: '#0a0d13' }}>
+
       <div 
         className="h-8 border-b border-gray-800 flex items-center justify-between px-4 cursor-move"
         style={{ background: '#090b10' }}
@@ -100,7 +100,7 @@ export const Header = ({
         </div>
       </div>
 
-      {/* Main Header Content */}
+
       <div className="container mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -115,7 +115,7 @@ export const Header = ({
           </div>
           
           <div className="flex items-center space-x-6">
-            {/* Stop All Sounds Button */}
+
             <button
               onClick={onStopAllSounds}
               className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg transition-colors duration-200 text-sm font-mono"
@@ -123,7 +123,7 @@ export const Header = ({
               Stop All
             </button>
 
-            {/* Virtual Device Volume Control */}
+
             <div className="flex items-center space-x-3">
               <Mic className="h-4 w-4 text-gray-400" />
               <input
@@ -140,7 +140,7 @@ export const Header = ({
               </span>
             </div>
 
-            {/* Output Device Volume Control */}
+
             <div className="flex items-center space-x-3">
               <Volume2 className="h-4 w-4 text-gray-400" />
               <input

@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import { Sound } from '../types';
+import { Sound, Hotkey } from '../types';
+import { useHotkeys } from './useHotkeys';
 
 export const useSounds = () => {
   const [sounds, setSounds] = useState<Sound[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { registerHotkey } = useHotkeys();
+  useHotkeys();
 
   const loadSounds = useCallback(async () => {
     try {
@@ -22,8 +25,6 @@ export const useSounds = () => {
   useEffect(() => {
     loadSounds();
   }, [loadSounds]);
-
-
 
   const handleImportAudio = useCallback(async () => {
     try {
@@ -49,10 +50,8 @@ export const useSounds = () => {
 
   const handleSoundVolumeChange = useCallback(async (soundId: string, newVolume: number) => {
     try {
-      // Clamp volume to valid range
       const clampedVolume = Math.max(0, Math.min(1, newVolume));
       
-      // Update local state immediately for responsive UI
       setSounds(prevSounds => 
         prevSounds.map(sound => 
           sound.id === soundId 
@@ -61,17 +60,15 @@ export const useSounds = () => {
         )
       );
       
-      // Update backend immediately for responsive volume feedback
       const result = await invoke('update_sound_volume', { id: soundId, volume: clampedVolume });
       console.log('Volume update result:', result);
       
     } catch (error) {
       console.error('Failed to update sound volume:', error);
-      // Revert local state on error
       setSounds(prevSounds => 
         prevSounds.map(sound => 
           sound.id === soundId 
-            ? { ...sound, volume: sound.volume } // Keep original volume
+            ? { ...sound, volume: sound.volume }
             : sound
         )
       );
@@ -82,11 +79,9 @@ export const useSounds = () => {
     try {
       console.log('Removing sound:', soundId);
       
-      // Remove the sound from the database
       const result = await invoke('remove_sound', { id: soundId });
       console.log('Remove result:', result);
       
-      // Update the local state
       setSounds(prevSounds => prevSounds.filter(sound => sound.id !== soundId));
       
       console.log('Sound removed successfully');
@@ -108,11 +103,9 @@ export const useSounds = () => {
     try {
       console.log('Setting start position for sound:', soundId, 'to:', position);
       
-      // Update the sound start position in the database
       const result = await invoke('update_sound_start_position', { id: soundId, startPosition: position });
       console.log('Start position update result:', result);
       
-      // Update the local state
       setSounds(prevSounds => 
         prevSounds.map(sound => 
           sound.id === soundId 
@@ -127,21 +120,27 @@ export const useSounds = () => {
     }
   };
 
-  const handleSetHotkey = async (soundId: string, hotkey: string) => {
+  const handleSetHotkey = async (soundId: string, hotkey: Hotkey) => {
     try {
-      console.log('Setting hotkey for sound:', soundId, 'to:', hotkey);
-      const result = await invoke('update_sound_hotkey', { id: soundId, hotkey: hotkey || null });
-      console.log('Hotkey update result:', result);
+      await registerHotkey(hotkey.key, hotkey.modifiers, soundId);
       setSounds(prevSounds =>
         prevSounds.map(sound =>
-          sound.id === soundId
-            ? { ...sound, hotkey }
-            : sound
+          sound.id === soundId ? { ...sound, hotkey } : sound
         )
       );
-      console.log('Hotkey updated successfully');
+      console.log('Hotkey set successfully');
     } catch (error) {
-      console.error('Failed to update sound hotkey:', error);
+      console.error('Failed to set hotkey:', error);
+    }
+  };
+
+  const handleSetCategories = async (soundId: string, categories: string[]) => {
+    try {
+      const unique = Array.from(new Set(categories.filter(Boolean)));
+      await invoke('update_sound_categories', { id: soundId, categories: unique });
+      setSounds(prev => prev.map(s => s.id === soundId ? { ...s, categories: unique, category: unique[0] } : s));
+    } catch (error) {
+      console.error('Failed to update sound categories:', error);
     }
   };
 
@@ -155,5 +154,6 @@ export const useSounds = () => {
     handleRemoveAllSounds,
     handleSetStartPosition,
     handleSetHotkey,
+    handleSetCategories,
   };
 }; 

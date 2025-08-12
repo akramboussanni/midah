@@ -18,14 +18,8 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
     try {
       const devices = await invoke<AudioDevice[]>('get_audio_devices');
       
-      // Filter devices based on showAllOutputDevices setting
-      const filteredDevices = showAllOutputDevices 
-        ? devices 
-        : devices.filter(d => d.device_type === 'virtual');
+            setAudioDevices(devices);
       
-      setAudioDevices(filteredDevices);
-      
-      // Look for VB-Cable device for virtual device
       const vbCableDevice = devices.find(d => 
         d.device_type === 'virtual' && (
           d.name.toLowerCase().includes('cable') || 
@@ -37,13 +31,11 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
         setSelectedVirtualDevice(vbCableDevice.name);
       }
       
-      // Set default device for output
       const defaultOutputDevice = devices.find(d => d.device_type === 'output' && d.is_default);
       if (defaultOutputDevice) {
         setSelectedOutputDevice(defaultOutputDevice.name);
       }
 
-      // Set default device for input
       const defaultInputDevice = devices.find(d => d.device_type === 'input' && d.is_default);
       if (defaultInputDevice) {
         setSelectedInputDevice(defaultInputDevice.name);
@@ -70,7 +62,6 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
     try {
       console.log('Playing sound:', soundId, localOnly ? '(local only)' : '', concurrentAudio ? '(concurrent)' : '(single)');
       
-      // If concurrent audio is disabled, stop all other sounds first
       if (!concurrentAudio && playingSounds.size > 0) {
         console.log('Stopping all sounds before playing new one (concurrent audio disabled)');
         await invoke('stop_all_sounds');
@@ -152,7 +143,7 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
     try {
       await invoke('set_virtual_volume', { volume: newVolume });
       setVirtualVolume(newVolume);
-      // Update device volumes for all currently playing sounds
+      
       await invoke('update_device_volumes_command');
     } catch (error) {
       console.error('Failed to set virtual volume:', error);
@@ -164,7 +155,7 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
       console.log("set output vol");
       await invoke('set_output_volume', { volume: newVolume });
       setOutputVolume(newVolume);
-      // Update device volumes for all currently playing sounds
+      
       await invoke('update_device_volumes_command');
     } catch (error) {
       console.error('Failed to set output volume:', error);
@@ -225,32 +216,29 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
     }
   };
 
-  // Poll for playing status to detect when sounds finish naturally
+
   useEffect(() => {
     if (playingSounds.size === 0) return;
 
     const interval = setInterval(async () => {
       try {
-        // Get the list of currently playing sounds from the backend
+
         const currentlyPlaying = await invoke<string[]>('get_playing_sounds');
         console.log('Currently playing sounds:', currentlyPlaying);
         
-        // Update the playing sounds state based on what's actually playing
+
         setPlayingSounds(() => {
           const newSet = new Set(currentlyPlaying);
           return newSet;
         });
         
-        // Also update local only sounds
         setLocalOnlySounds(() => {
-          // Note: We can't distinguish local vs normal playback from the backend
-          // so we'll keep the local only state as is for now
           return new Set();
         });
       } catch (error) {
         console.error('Failed to check playing sounds:', error);
       }
-    }, 500); // Check every 500ms for more responsive updates
+    }, 500);
 
     return () => clearInterval(interval);
   }, [playingSounds]);
@@ -260,7 +248,7 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
     loadVolume();
   }, [showAllOutputDevices]);
 
-  // Debug function to log playback position for a given soundId
+
   const debugPlaybackPosition = async (soundId: string) => {
     try {
       const pos = await getPlaybackPosition(soundId);
@@ -270,7 +258,7 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
     }
   };
 
-  // Check for virtual cable (VB-Cable or Voicemod)
+
   const checkVirtualCable = async () => {
     try {
       const result = await invoke('check_virtual_cable');
@@ -282,7 +270,20 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
     }
   };
 
-  // Install VB-Cable (Windows only)
+
+  const getVirtualDevices = () => {
+    return showAllOutputDevices 
+      ? audioDevices 
+      : audioDevices.filter(d => d.device_type === 'virtual');
+  };
+
+  const getOutputDevices = () => {
+    return showAllOutputDevices 
+      ? audioDevices 
+      : audioDevices.filter(d => d.device_type === 'output');
+  };
+
+
   const installVirtualCable = async () => {
     try {
       const result = await invoke('install_virtual_cable');
@@ -296,6 +297,8 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
 
   return {
     audioDevices,
+    getVirtualDevices,
+    getOutputDevices,
     selectedVirtualDevice,
     selectedOutputDevice,
     selectedInputDevice,
