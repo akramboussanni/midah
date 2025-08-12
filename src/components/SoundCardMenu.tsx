@@ -85,9 +85,7 @@ export const SoundCardMenu: React.FC<SoundCardMenuProps> = ({
           left = margin;
         }
 
-        // Default place below the button
         let top = anchorRect.bottom + window.scrollY + 4;
-        // Measure and flip upwards if overflowing viewport bottom
         const menuHeight = menuRef.current.offsetHeight || 0;
         const viewportBottom = window.scrollY + window.innerHeight;
         if (top + menuHeight > viewportBottom - margin) {
@@ -97,7 +95,6 @@ export const SoundCardMenu: React.FC<SoundCardMenuProps> = ({
             menuRef.current.style.maxHeight = '';
             menuRef.current.style.overflow = '';
           } else {
-            // Clamp to top margin and allow internal scroll to avoid page growth
             top = window.scrollY + margin;
             const maxHeight = anchorRect.top + window.scrollY - margin - top;
             if (maxHeight > 100) {

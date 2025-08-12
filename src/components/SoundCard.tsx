@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Play, Square, Volume2, MoreVertical, Headphones, Clock } from 'lucide-react';
+import { Play, Square, MoreVertical, Headphones, Clock } from 'lucide-react';
+import { VolumeSlider } from './VolumeSlider';
+import { PlaybackProgress } from './PlaybackProgress';
 import { Sound, Hotkey } from '../types';
 import { SoundCardMenu } from './SoundCardMenu';
 
@@ -67,37 +69,14 @@ export const SoundCard = ({
   }, [isMenuOpen]);
 
   useEffect(() => {
-    if (!isPlaying) {
-      setCurrentTime(0);
-      return;
-    }
-
-    const interval = setInterval(async () => {
-      if (getPlaybackPosition) {
-        const position = await getPlaybackPosition(sound.id);
-        if (position !== null) {
-          setCurrentTime(position);
-        }
-      }
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [isPlaying, sound.id, getPlaybackPosition]);
+    if (!isPlaying) setCurrentTime(0);
+  }, [isPlaying]);
 
   const duration = sound.duration || 0;
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  // progress no longer used here; handled inside PlaybackProgress
 
-  const handleProgressBarClick = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
-    console.log('Progress bar clicked!', { isPlaying, duration, onSeek: !!onSeek });
-    if (!isPlaying || !duration || !onSeek) {
-      console.log('Click ignored - conditions not met');
-      return;
-    }
-    const rect = (e.target as HTMLDivElement).getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percent = Math.max(0, Math.min(1, x / rect.width));
-    const newTime = percent * duration;
-    console.log('Seeking to:', { x, rect: rect.width, percent, newTime, duration });
+  const handleSeek = (newTime: number) => {
+    if (!isPlaying || !duration || !onSeek) return;
     onSeek(sound.id, newTime);
     setCurrentTime(newTime);
   };
@@ -192,19 +171,14 @@ export const SoundCard = ({
 
       {isPlaying && duration > 0 && (
         <div className="mb-3">
-          <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
-            <span className="font-mono">{formatTime(currentTime)}</span>
-            <span className="font-mono">{formatTime(duration)}</span>
-          </div>
-          <div 
-            className="w-full bg-gray-800 rounded-full h-1 cursor-pointer"
-            onClick={handleProgressBarClick}
-          >
-            <div 
-              className="bg-white h-1 rounded-full transition-all duration-100"
-              style={{ width: `${Math.min(progress, 100)}%` }}
-            />
-          </div>
+          <PlaybackProgress 
+            duration={duration} 
+            currentTime={currentTime} 
+            onSeek={handleSeek}
+            isPlaying={isPlaying}
+            soundId={sound.id}
+            getPlaybackPosition={getPlaybackPosition}
+          />
         </div>
       )}
 
@@ -216,42 +190,11 @@ export const SoundCard = ({
       )}
 
       <div className="space-y-3">
-        <div className={`flex items-center space-x-2 p-2 rounded border volume-control ${
-          isVolumeDragging 
-            ? 'bg-gray-700/50 border-gray-600/50' 
-            : 'bg-gray-800/30 border-gray-700/30'
-        }`}>
-          <Volume2 className={`h-3 w-3 flex-shrink-0 ${
-            isVolumeDragging ? 'text-white' : 'text-gray-400'
-          }`} />
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={sound.volume}
-            onChange={(e) => {
-              e.stopPropagation();
-              const newVolume = parseFloat(e.target.value);
-              onVolumeChange(sound.id, newVolume);
-            }}
-            onMouseDown={(e) => {
-              e.stopPropagation();
-              setIsVolumeDragging(true);
-            }}
-            onMouseUp={(e) => {
-              e.stopPropagation();
-              setIsVolumeDragging(false);
-            }}
-            onMouseLeave={() => setIsVolumeDragging(false)}
-            onClick={(e) => e.stopPropagation()}
-            className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
-            style={{ pointerEvents: 'auto' }}
-          />
-          <span className="text-xs text-gray-400 font-mono w-8 flex-shrink-0">
-            {Math.round(sound.volume * 100)}%
-          </span>
-        </div>
+        <VolumeSlider 
+          value={sound.volume} 
+          onChange={(v) => onVolumeChange(sound.id, v)}
+          onDraggingChange={setIsVolumeDragging}
+        />
         {sound.hotkey && (
           <div className="flex items-center justify-end">
             <span className="bg-gray-800 px-2 py-1 rounded text-xs font-mono border border-gray-700 text-gray-400">

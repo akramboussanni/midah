@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
-    sync::mpsc::{self, Sender, Receiver},
+    sync::mpsc::{self, Sender, Receiver, RecvTimeoutError},
     thread,
-    time::Instant,
+    time::{Instant, Duration},
 };
 use tracing::info;
 use once_cell::sync::OnceCell;
@@ -191,12 +191,13 @@ fn handle_play_command(
     let (mut new_sinks, new_streams, new_device_volumes) = setup_devices_for_playback(&manager, sound_id, local_only);
     
     let source_result = crate::audio::SymphoniaAudioSource::new(file_path, start_position.unwrap_or(0.0));
-    let duration = if let Ok(ref src) = source_result {
+    let total_duration = if let Ok(ref src) = source_result {
         src.total_duration().map(|d| d.as_secs_f32()).unwrap_or(0.0)
     } else { 0.0 };
     let used_start_position = start_position.unwrap_or(0.0);
-    info!("Sound {} duration calculation: total={:.2}s, start_pos={:.2}s, effective_duration={:.2}s", 
-          sound_id, duration, used_start_position, duration - used_start_position);
+    let remaining_duration = if total_duration > 0.0 { (total_duration - used_start_position).max(0.0) } else { 0.0 };
+    info!("Sound {} duration calculation: total={:.2}s, start_pos={:.2}s, remaining={:.2}s", 
+          sound_id, total_duration, used_start_position, remaining_duration);
     
     let buffered_source = match source_result {
         Ok(src) => src.buffered(),
@@ -221,7 +222,8 @@ fn handle_play_command(
     );
     
     sound_instances.insert(sound_id.to_string(), instance);
-    playing_thread.lock().expect("Lock poisoned").insert(sound_id.to_string(), (Instant::now(), duration, used_start_position));
+    // Store remaining duration; get_playing_sounds and get_playback_position treat it as remaining time
+    playing_thread.lock().expect("Lock poisoned").insert(sound_id.to_string(), (Instant::now(), remaining_duration, used_start_position));
     info!("Started playing sound: {} with volume: {} (local_only: {})", sound_id, sound_volume, local_only);
 }
 
@@ -247,11 +249,11 @@ fn audio_thread_worker(
     command_rx: Receiver<AudioCommand>,
     playing_thread: Arc<Mutex<HashMap<String, (Instant, f32, f32)>>>,
 ) {
-    
     let mut sound_instances: HashMap<String, SoundInstance> = HashMap::new();
-    
+    let tick = Duration::from_millis(50);
+
     loop {
-        match command_rx.recv() {
+        match command_rx.recv_timeout(tick) {
             Ok(cmd) => {
                 match cmd {
                     AudioCommand::Play { file_path, sound_id, start_position, sound_volume, local_only } => {
@@ -301,7 +303,10 @@ fn audio_thread_worker(
                     }
                 }
             }
-            Err(_) => {
+            Err(RecvTimeoutError::Timeout) => {
+                // No command this tick
+            }
+            Err(RecvTimeoutError::Disconnected) => {
                 info!("Audio thread channel closed, shutting down");
                 break;
             }
@@ -333,14 +338,28 @@ impl AudioEngine {
     }
 
     pub fn get_playing_sounds(&self) -> Vec<String> {
-        self.playing.lock().expect("Lock poisoned").keys().cloned().collect()
+        // duration stored here is already the remaining duration from the start position
+        self
+            .playing
+            .lock()
+            .expect("Lock poisoned")
+            .iter()
+            .filter_map(|(id, (start_time, remaining_duration, _start_position))| {
+                let elapsed = start_time.elapsed().as_secs_f32();
+                if *remaining_duration == 0.0 || elapsed < *remaining_duration {
+                    Some(id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     pub fn get_playback_position(&self, sound_id: &str) -> Option<f32> {
         let playing = self.playing.lock().expect("Lock poisoned");
-        if let Some((start_time, duration, start_position)) = playing.get(sound_id) {
+        if let Some((start_time, remaining_duration, start_position)) = playing.get(sound_id) {
             let elapsed = start_time.elapsed().as_secs_f32();
-            if elapsed < *duration || *duration == 0.0 {
+            if *remaining_duration == 0.0 || elapsed < *remaining_duration {
                 Some(*start_position + elapsed)
             } else {
                 None

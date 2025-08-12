@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, Code, Music, StopCircle, X, HelpCircle } from 'lucide-react';
+import { Search, Plus, Code, Music, StopCircle, X, HelpCircle, ListMusic, ChevronDown, ChevronRight } from 'lucide-react';
 import { TabType, AudioDevice, Hotkey } from './types';
 import { useAudio } from './hooks/useAudio';
 import { useSounds } from './hooks/useSounds';
@@ -14,6 +14,7 @@ import { DependencyProvider } from './contexts/DependencyContext';
 import { HotkeyInput } from './components/HotkeyInput';
 import { HotkeySetting } from './components/HotkeySetting';
 import { listen } from '@tauri-apps/api/event';
+import { PlayingDrawer } from './components/PlayingDrawer';
 
 
 
@@ -33,6 +34,10 @@ function App() {
   const [settingsTab, setSettingsTab] = useState<'devices' | 'general' | 'hotkeys'>('devices');
   const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [showCaptureInfoDialog, setShowCaptureInfoDialog] = useState(false);
+  const [isPlayingDrawerOpen, setIsPlayingDrawerOpen] = useState(false);
+  const [openOutputSettings, setOpenOutputSettings] = useState(false);
+  const [openInputSettings, setOpenInputSettings] = useState(false);
+  const [openVirtualSettings, setOpenVirtualSettings] = useState(false);
 
   const {
     audioDevices,
@@ -440,6 +445,13 @@ function App() {
                       </div>
                     </div>
                     <button
+                      onClick={() => setIsPlayingDrawerOpen(true)}
+                      className="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-lg transition-colors duration-200"
+                      title="Show Playing"
+                    >
+                      <ListMusic className="h-5 w-5" />
+                    </button>
+                    <button
                       onClick={handleStopAllSounds}
                       className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg transition-colors duration-200"
                       title="Stop All Sounds"
@@ -450,7 +462,7 @@ function App() {
                 </div>
 
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
                 {filteredSounds.map((sound, index) => (
                   <SoundCard
                     key={sound.id}
@@ -567,124 +579,151 @@ function App() {
             <div className="container mx-auto px-6 py-8">
               <div className="space-y-8 max-w-2xl fade-in">
               <div className="flex space-x-4 mb-6">
-                <button onClick={() => setSettingsTab('devices')} className={`px-4 py-2 rounded font-mono text-sm ${settingsTab === 'devices' ? 'bg-blue-700 text-white' : 'bg-gray-800 text-gray-300'}`}>Devices</button>
-                <button onClick={() => setSettingsTab('general')} className={`px-4 py-2 rounded font-mono text-sm ${settingsTab === 'general' ? 'bg-blue-700 text-white' : 'bg-gray-800 text-gray-300'}`}>General</button>
+                <button onClick={() => setSettingsTab('devices')} className={`px-4 py-2 rounded font-mono text-sm ${settingsTab === 'devices' ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-300'}`}>Devices</button>
+                <button onClick={() => setSettingsTab('general')} className={`px-4 py-2 rounded font-mono text-sm ${settingsTab === 'general' ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-300'}`}>General</button>
                 <button onClick={() => {
                   setSettingsTab('hotkeys');
                   reloadHotkeyBindings();
-                }} className={`px-4 py-2 rounded font-mono text-sm ${settingsTab === 'hotkeys' ? 'bg-blue-700 text-white' : 'bg-gray-800 text-gray-300'}`}>Hotkeys</button>
+                }} className={`px-4 py-2 rounded font-mono text-sm ${settingsTab === 'hotkeys' ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-300'}`}>Hotkeys</button>
               </div>
               {settingsTab === 'devices' && (
                 <>
-                  <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800 space-y-4">
-                    <h3 className="text-lg font-mono font-semibold mb-2">Output Device</h3>
-                    <div className="flex items-center justify-between py-2">
-                      <span className="font-mono text-sm text-gray-300">Select Output Device</span>
-                      <select
-                        value={selectedOutputDevice}
-                        onChange={e => handleOutputDeviceChange(e.target.value)}
-                        className="rounded border-gray-600 bg-gray-700 text-white px-2 py-1"
-                      >
-                        {getOutputDevices().map(device => (
-                          <option key={device.name} value={device.name}>{device.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="py-2">
-                      <label className="block font-mono text-sm text-gray-300 mb-1">Output Volume</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min={0}
-                          max={1}
-                          step={0.01}
-                          value={outputVolume}
-                          onChange={e => handleOutputVolumeChange(parseFloat(e.target.value))}
-                          className="w-full accent-white h-2 rounded-lg appearance-none bg-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          style={{ accentColor: 'white' }}
-                        />
-                        <span className="font-mono text-xs text-gray-100 min-w-[32px] text-right">{Math.round(outputVolume * 100)}%</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800 space-y-4">
-                    <h3 className="text-lg font-mono font-semibold mb-2">Input Device</h3>
-                    <div className="flex items-center justify-between py-2">
-                      <span className="font-mono text-sm text-gray-300">Select Input Device</span>
-                      <select
-                        value={selectedInputDevice}
-                        onChange={e => handleInputDeviceChange(e.target.value)}
-                        className="rounded border-gray-600 bg-gray-700 text-white px-2 py-1"
-                      >
-                        {audioDevices.filter(d => d.device_type === 'input').map(device => (
-                          <option key={device.name} value={device.name}>{device.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="py-2">
-                      <label className="block font-mono text-sm text-gray-300 mb-1">Input Volume</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min={0}
-                          max={1}
-                          step={0.01}
-                          value={inputVolume}
-                          onChange={e => handleInputVolumeChange(parseFloat(e.target.value))}
-                          className="w-full accent-white h-2 rounded-lg appearance-none bg-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          style={{ accentColor: 'white' }}
-                        />
-                        <span className="font-mono text-xs text-gray-100 min-w-[32px] text-right">{Math.round(inputVolume * 100)}%</span>
-                      </div>
-                    </div>
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={isInputCapturing}
-                        onChange={e => handleToggleInputCapture(e.target.checked)}
-                        className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
-                      />
-                      <span className="text-gray-300 text-sm font-mono">Capture Input?</span>
-                      <button
-                        type="button"
-                        onClick={() => setShowCaptureInfoDialog(true)}
-                        className="inline-flex items-center justify-center p-1 rounded hover:bg-gray-700"
-                        title="What does this do?"
-                      >
-                        <HelpCircle className="h-4 w-4 text-gray-400 hover:text-gray-200" />
+                  <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-mono font-semibold">Output Device</h3>
+                      <button onClick={() => setOpenOutputSettings(v => !v)} className="p-1 rounded hover:bg-gray-800">
+                        {openOutputSettings ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
                       </button>
-                    </label>
-                  </div>
-                  <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800 space-y-4 mb-6">
-                    <h3 className="text-lg font-mono font-semibold mb-2">Virtual Device</h3>
-                    <div className="flex items-center justify-between py-2">
-                      <span className="font-mono text-sm text-gray-300">Select Virtual Device</span>
-                      <select
-                        value={selectedVirtualDevice}
-                        onChange={e => handleVirtualDeviceChange(e.target.value)}
-                        className="rounded border-gray-600 bg-gray-700 text-white px-2 py-1"
-                      >
-                        {getVirtualDevices().map(device => (
-                          <option key={device.name} value={device.name}>{device.name}</option>
-                        ))}
-                      </select>
                     </div>
-                    <div className="py-2">
-                      <label className="block font-mono text-sm text-gray-300 mb-1">Virtual Volume</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min={0}
-                          max={1}
-                          step={0.01}
-                          value={virtualVolume}
-                          onChange={e => handleVirtualVolumeChange(parseFloat(e.target.value))}
-                          className="w-full accent-white h-2 rounded-lg appearance-none bg-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          style={{ accentColor: 'white' }}
-                        />
-                        <span className="font-mono text-xs text-gray-100 min-w-[32px] text-right">{Math.round(virtualVolume * 100)}%</span>
+                    {openOutputSettings && (
+                      <div className="space-y-4 mt-4">
+                        <div className="flex items-center justify-between py-2">
+                          <span className="font-mono text-sm text-gray-300">Select Output Device</span>
+                          <select
+                            value={selectedOutputDevice}
+                            onChange={e => handleOutputDeviceChange(e.target.value)}
+                            className="rounded border-gray-600 bg-gray-700 text-white px-2 py-1"
+                          >
+                            {getOutputDevices().map(device => (
+                              <option key={device.name} value={device.name}>{device.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="py-2">
+                          <label className="block font-mono text-sm text-gray-300 mb-1">Output Volume</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min={0}
+                              max={1}
+                              step={0.01}
+                              value={outputVolume}
+                              onChange={e => handleOutputVolumeChange(parseFloat(e.target.value))}
+                              className="w-full accent-white h-2 rounded-lg appearance-none bg-white/20 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                              style={{ accentColor: 'white' }}
+                            />
+                            <span className="font-mono text-xs text-gray-100 min-w-[32px] text-right">{Math.round(outputVolume * 100)}%</span>
+                          </div>
+                        </div>
                       </div>
+                    )}
+                  </div>
+                  <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-mono font-semibold">Input Device</h3>
+                      <button onClick={() => setOpenInputSettings(v => !v)} className="p-1 rounded hover:bg-gray-800">
+                        {openInputSettings ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                      </button>
                     </div>
+                    {openInputSettings && (
+                      <div className="space-y-4 mt-4">
+                        <div className="flex items-center justify-between py-2">
+                          <span className="font-mono text-sm text-gray-300">Select Input Device</span>
+                          <select
+                            value={selectedInputDevice}
+                            onChange={e => handleInputDeviceChange(e.target.value)}
+                            className="rounded border-gray-600 bg-gray-700 text-white px-2 py-1"
+                          >
+                            {audioDevices.filter(d => d.device_type === 'input').map(device => (
+                              <option key={device.name} value={device.name}>{device.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="py-2">
+                          <label className="block font-mono text-sm text-gray-300 mb-1">Input Volume</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min={0}
+                              max={1}
+                              step={0.01}
+                              value={inputVolume}
+                              onChange={e => handleInputVolumeChange(parseFloat(e.target.value))}
+                              className="w-full accent-white h-2 rounded-lg appearance-none bg-white/20 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                              style={{ accentColor: 'white' }}
+                            />
+                            <span className="font-mono text-xs text-gray-100 min-w-[32px] text-right">{Math.round(inputVolume * 100)}%</span>
+                          </div>
+                        </div>
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={isInputCapturing}
+                            onChange={e => handleToggleInputCapture(e.target.checked)}
+                            className="rounded border-gray-600 bg-gray-700 text-gray-300 focus:ring-gray-500"
+                          />
+                          <span className="text-gray-300 text-sm font-mono">Capture Input?</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowCaptureInfoDialog(true)}
+                            className="inline-flex items-center justify-center p-1 rounded hover:bg-gray-700"
+                            title="What does this do?"
+                          >
+                            <HelpCircle className="h-4 w-4 text-gray-400 hover:text-gray-200" />
+                          </button>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                  <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800 mb-6">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-mono font-semibold">Virtual Device</h3>
+                      <button onClick={() => setOpenVirtualSettings(v => !v)} className="p-1 rounded hover:bg-gray-800">
+                        {openVirtualSettings ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                      </button>
+                    </div>
+                    {openVirtualSettings && (
+                      <div className="space-y-4 mt-4">
+                        <div className="flex items-center justify-between py-2">
+                          <span className="font-mono text-sm text-gray-300">Select Virtual Device</span>
+                          <select
+                            value={selectedVirtualDevice}
+                            onChange={e => handleVirtualDeviceChange(e.target.value)}
+                            className="rounded border-gray-600 bg-gray-700 text-white px-2 py-1"
+                          >
+                            {getVirtualDevices().map(device => (
+                              <option key={device.name} value={device.name}>{device.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="py-2">
+                          <label className="block font-mono text-sm text-gray-300 mb-1">Virtual Volume</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min={0}
+                              max={1}
+                              step={0.01}
+                              value={virtualVolume}
+                              onChange={e => handleVirtualVolumeChange(parseFloat(e.target.value))}
+                              className="w-full accent-white h-2 rounded-lg appearance-none bg-white/20 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                              style={{ accentColor: 'white' }}
+                            />
+                            <span className="font-mono text-xs text-gray-100 min-w-[32px] text-right">{Math.round(virtualVolume * 100)}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -710,7 +749,7 @@ function App() {
                       <button
                         onClick={saveYoutubeApiKey}
                         disabled={isLoadingApiKey || apiKeyStatus === 'saving'}
-                        className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded font-mono"
+                        className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded font-mono"
                       >
                         Save
                       </button>
@@ -726,7 +765,7 @@ function App() {
                           type="checkbox"
                           checked={concurrentAudio}
                           onChange={e => handleConcurrentAudioChange(e.target.checked)}
-                          className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
+                        className="rounded border-gray-600 bg-gray-700 text-gray-300 focus:ring-gray-500"
                         />
                         <span className="text-gray-300 text-sm font-mono">Allow concurrent audio (multiple sounds at once)</span>
                       </label>
@@ -735,7 +774,7 @@ function App() {
                           type="checkbox"
                           checked={showAllOutputDevices}
                           onChange={e => handleShowAllOutputDevicesChange(e.target.checked)}
-                          className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
+                        className="rounded border-gray-600 bg-gray-700 text-gray-300 focus:ring-gray-500"
                         />
                         <span className="text-gray-300 text-sm font-mono">Show all output devices</span>
                       </label>
@@ -772,7 +811,7 @@ function App() {
                           alert(`Failed to update yt-dlp: ${error}`);
                         }
                       }}
-                      className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded font-mono"
+                      className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded font-mono"
                     >
                       Update yt-dlp
                     </button>
@@ -829,6 +868,19 @@ function App() {
             </div>
           )}
         </main>
+        {activeTab === 'sounds' && (
+          <PlayingDrawer
+            open={isPlayingDrawerOpen}
+            onClose={() => setIsPlayingDrawerOpen(false)}
+            soundsLookup={new Map(sounds.map(s => [s.id, s]))}
+            playingIds={Array.from(playingSounds)}
+            getPlaybackPosition={getPlaybackPosition}
+            onSeek={handleSeekSound}
+            onStop={handleStopSound}
+            onVolumeChange={handleSoundVolumeChange}
+            onStopAll={handleStopAllSounds}
+          />
+        )}
       </div>
     </DependencyProvider>
   );
