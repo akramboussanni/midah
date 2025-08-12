@@ -1,6 +1,6 @@
 [package]
 name = "midah"
-version = "0.3.1"
+version = "1.0.0"
 edition = "2021"
 build = "src-tauri/build.rs"
 
@@ -42,6 +42,7 @@ futures-util = "0.3"
 global-hotkey = "0.7"
 crossbeam-channel = "0.5.15"
 rdev = "0.5.3"
+num-traits = "0.2.19"
 
 
 [features]

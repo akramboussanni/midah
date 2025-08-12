@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, Code, Music, StopCircle, X } from 'lucide-react';
+import { Search, Plus, Code, Music, StopCircle, X, HelpCircle } from 'lucide-react';
 import { TabType, AudioDevice, Hotkey } from './types';
 import { useAudio } from './hooks/useAudio';
 import { useSounds } from './hooks/useSounds';
@@ -31,6 +31,8 @@ function App() {
   const [vbCableInstallPressed, setVbCableInstallPressed] = useState(false);
   const [showAllOutputDevices, setShowAllOutputDevices] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'devices' | 'general' | 'hotkeys'>('devices');
+  const [showHelpDialog, setShowHelpDialog] = useState(false);
+  const [showCaptureInfoDialog, setShowCaptureInfoDialog] = useState(false);
 
   const {
     audioDevices,
@@ -38,8 +40,11 @@ function App() {
     getOutputDevices,
     selectedVirtualDevice,
     selectedOutputDevice,
+    selectedInputDevice,
     virtualVolume,
     outputVolume,
+    inputVolume,
+    isInputCapturing,
     playingSounds,
     localOnlySounds,
     handlePlaySound,
@@ -49,8 +54,11 @@ function App() {
     getPlaybackPosition,
     handleVirtualVolumeChange,
     handleOutputVolumeChange,
+    handleInputVolumeChange,
     handleVirtualDeviceChange,
     handleOutputDeviceChange,
+    handleInputDeviceChange,
+    handleToggleInputCapture,
     debugAudioStatus,
   } = useAudio(showAllOutputDevices);
 
@@ -371,7 +379,7 @@ function App() {
           </div>
         )}
         
-        <Navigation activeTab={activeTab} onTabChange={handleTabChange} />
+      <Navigation activeTab={activeTab} onTabChange={handleTabChange} />
 
         <main className="flex h-screen pt-0" style={{ background: 'rgba(10,13,19,0.98)' }}>
           {activeTab === 'sounds' && (
@@ -413,6 +421,12 @@ function App() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {!isInputCapturing && (
+                      <button
+                        onClick={() => setShowHelpDialog(true)}
+                        className="text-xs text-gray-400 hover:text-gray-200 font-mono mr-3"
+                      >Nobody can hear me!</button>
+                    )}
                     <div className="relative group">
                       <button
                         onClick={handleImportAudio}
@@ -483,6 +497,32 @@ function App() {
             </div>
           )}
 
+          {showCaptureInfoDialog && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/70" onClick={() => setShowCaptureInfoDialog(false)}></div>
+              <div className="relative bg-gray-900 border border-gray-800 rounded-lg shadow-xl max-w-lg w-full mx-4 p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-mono font-semibold">Capture Input</h3>
+                  <button onClick={() => setShowCaptureInfoDialog(false)} className="text-gray-400 hover:text-gray-200">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <p className="text-sm text-gray-300 font-mono">
+                  When enabled, your microphone is routed to the selected virtual output so other apps can hear you.
+                </p>
+                <p className="text-sm text-gray-400 font-mono">
+                  Use Input Volume to control mic gain into the virtual output. Virtual Volume also affects the final level.
+                </p>
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => setShowCaptureInfoDialog(false)}
+                    className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded font-mono"
+                  >Got it</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'youtube' && (
             <div className="container mx-auto px-6 py-8">
               <div className="space-y-8 fade-in">
@@ -490,6 +530,38 @@ function App() {
               </div>
             </div>
           )}
+
+          {showHelpDialog && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/70" onClick={() => setShowHelpDialog(false)}></div>
+              <div className="relative bg-gray-900 border border-gray-800 rounded-lg shadow-xl max-w-lg w-full mx-4 p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-mono font-semibold">Enable mic routing</h3>
+                  <button onClick={() => setShowHelpDialog(false)} className="text-gray-400 hover:text-gray-200">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <p className="text-sm text-gray-300 font-mono">Turn on Capture Input to route your microphone to the virtual output.</p>
+                <ol className="list-decimal list-inside text-sm text-gray-300 font-mono space-y-1">
+                  <li>Go to Settings → Devices.</li>
+                  <li>Select your microphone under Input Device.</li>
+                  <li>Toggle “Capture Input?” on and adjust Input Volume.</li>
+                </ol>
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => setShowHelpDialog(false)}
+                    className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded font-mono"
+                  >Close</button>
+                  <button
+                    onClick={async () => { setShowHelpDialog(false); setActiveTab('settings'); setSettingsTab('devices'); }}
+                    className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded font-mono"
+                  >Open Settings</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          
 
           {activeTab === 'settings' && (
             <div className="container mx-auto px-6 py-8">
@@ -536,6 +608,54 @@ function App() {
                     </div>
                   </div>
                   <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800 space-y-4">
+                    <h3 className="text-lg font-mono font-semibold mb-2">Input Device</h3>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="font-mono text-sm text-gray-300">Select Input Device</span>
+                      <select
+                        value={selectedInputDevice}
+                        onChange={e => handleInputDeviceChange(e.target.value)}
+                        className="rounded border-gray-600 bg-gray-700 text-white px-2 py-1"
+                      >
+                        {audioDevices.filter(d => d.device_type === 'input').map(device => (
+                          <option key={device.name} value={device.name}>{device.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="py-2">
+                      <label className="block font-mono text-sm text-gray-300 mb-1">Input Volume</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={inputVolume}
+                          onChange={e => handleInputVolumeChange(parseFloat(e.target.value))}
+                          className="w-full accent-white h-2 rounded-lg appearance-none bg-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          style={{ accentColor: 'white' }}
+                        />
+                        <span className="font-mono text-xs text-gray-100 min-w-[32px] text-right">{Math.round(inputVolume * 100)}%</span>
+                      </div>
+                    </div>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={isInputCapturing}
+                        onChange={e => handleToggleInputCapture(e.target.checked)}
+                        className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-300 text-sm font-mono">Capture Input?</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowCaptureInfoDialog(true)}
+                        className="inline-flex items-center justify-center p-1 rounded hover:bg-gray-700"
+                        title="What does this do?"
+                      >
+                        <HelpCircle className="h-4 w-4 text-gray-400 hover:text-gray-200" />
+                      </button>
+                    </label>
+                  </div>
+                  <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800 space-y-4 mb-6">
                     <h3 className="text-lg font-mono font-semibold mb-2">Virtual Device</h3>
                     <div className="flex items-center justify-between py-2">
                       <span className="font-mono text-sm text-gray-300">Select Virtual Device</span>

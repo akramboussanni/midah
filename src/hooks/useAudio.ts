@@ -58,6 +58,19 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
     }
   };
 
+  const loadCaptureSetting = async () => {
+    try {
+      const value = await invoke<string | null>('get_setting', { key: 'capture_input' });
+      const enabled = value === 'true';
+      setIsInputCapturing(enabled);
+      if (enabled) {
+        try { await invoke('start_input_capture'); } catch (e) { console.error('Failed to start input capture on load:', e); }
+      }
+    } catch (error) {
+      console.error('Failed to load capture setting:', error);
+    }
+  };
+
   const handlePlaySound = async (soundId: string, localOnly: boolean = false, concurrentAudio: boolean = true) => {
     try {
       console.log('Playing sound:', soundId, localOnly ? '(local only)' : '', concurrentAudio ? '(concurrent)' : '(single)');
@@ -184,6 +197,9 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
     try {
       await invoke('set_input_device', { deviceName });
       setSelectedInputDevice(deviceName);
+      if (isInputCapturing) {
+        try { await invoke('start_input_capture'); } catch (e) { console.error('Failed to restart input capture:', e); }
+      }
     } catch (error) {
       console.error('Failed to set input device:', error);
     }
@@ -202,8 +218,27 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
     try {
       await invoke('stop_input_capture');
       setIsInputCapturing(false);
+      try { await invoke('save_setting', { key: 'capture_input', value: 'false' }); } catch {}
     } catch (error) {
       console.error('Failed to stop input capture:', error);
+    }
+  };
+
+  const handleStartInputCapture = async () => {
+    try {
+      await invoke('start_input_capture');
+      setIsInputCapturing(true);
+      try { await invoke('save_setting', { key: 'capture_input', value: 'true' }); } catch {}
+    } catch (error) {
+      console.error('Failed to start input capture:', error);
+    }
+  };
+
+  const handleToggleInputCapture = async (on: boolean) => {
+    if (on) {
+      await handleStartInputCapture();
+    } else {
+      await handleStopInputCapture();
     }
   };
 
@@ -246,6 +281,7 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
   useEffect(() => {
     loadAudioDevices();
     loadVolume();
+    loadCaptureSetting();
   }, [showAllOutputDevices]);
 
 
@@ -321,6 +357,8 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
     handleOutputDeviceChange,
     handleInputDeviceChange,
     handleStopInputCapture,
+    handleStartInputCapture,
+    handleToggleInputCapture,
     debugAudioStatus,
     checkVirtualCable,
     installVirtualCable,

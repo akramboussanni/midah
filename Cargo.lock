@@ -2531,7 +2531,7 @@ dependencies = [
 
 [[package]]
 name = "midah"
-version = "0.3.1"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2544,6 +2544,7 @@ dependencies = [
  "futures-util",
  "global-hotkey",
  "hound",
+ "num-traits",
  "once_cell",
  "rdev",
  "regex",
