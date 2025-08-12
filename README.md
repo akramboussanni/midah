@@ -13,6 +13,8 @@
 
 ### Core Features
 
+- **Hotkey System**: Play or stop sounds without even opening the app.
+- **Sound Categorization**: Order your sounds with categories so your app doesn't stay messy.
 - **Playback volume**: Set an output device to hear your own audios. Control output, playback and individual audio volume.
 - **Local-only**: Play audio locally only and don't output it to your mic
 - **VB-Cable Installer**: Midah requires VB-Cable or any virtual cable to work. It provides an installer for VB-Cable in the case that it is not present.
@@ -32,8 +34,6 @@
   <p><em>Search and import audio directly from YouTube videos</em></p>
 </div>
 
-### Notice
-The hotkey feature is still in WIP I am working on it.
 
 ---
 

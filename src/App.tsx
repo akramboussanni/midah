@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, Code, Music, StopCircle } from 'lucide-react';
+import { Search, Plus, Code, Music, StopCircle, X } from 'lucide-react';
 import { TabType, AudioDevice, Hotkey } from './types';
 import { useAudio } from './hooks/useAudio';
 import { useSounds } from './hooks/useSounds';
@@ -397,9 +397,18 @@ function App() {
                         placeholder="Search sounds..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-12 pr-4 bg-[#090b10] text-white border border-gray-700 focus:border-gray-500 focus:ring-gray-500 placeholder-gray-500 rounded-lg py-3 transition-colors duration-200"
+                        className="w-full pl-12 pr-12 bg-[#090b10] text-white border border-gray-700 focus:border-gray-500 focus:ring-gray-500 placeholder-gray-500 rounded-lg py-3 transition-colors duration-200"
                         style={{ lineHeight: '1.5', minHeight: '48px' }}
                       />
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery('')}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 hover:text-gray-300 transition-colors duration-200 z-10"
+                          title="Clear search"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

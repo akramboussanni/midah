@@ -8,17 +8,6 @@ interface HotkeySettingProps {
   onHotkeyChange: (hotkey: Hotkey | null) => void;
 }
 
-function hotkeyToString(hotkey?: Hotkey): string {
-  if (!hotkey) return '';
-  const mods = [];
-  if (hotkey.modifiers.ctrl) mods.push('Ctrl');
-  if (hotkey.modifiers.alt) mods.push('Alt');
-  if (hotkey.modifiers.shift) mods.push('Shift');
-  if (hotkey.modifiers.meta) mods.push('Meta');
-  if (hotkey.key) mods.push(hotkey.key.toUpperCase());
-  return mods.join('+');
-}
-
 export const HotkeySetting: React.FC<HotkeySettingProps> = ({
   soundId,
   currentHotkey,

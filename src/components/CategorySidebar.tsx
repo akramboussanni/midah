@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FolderOpen, Folder, Music, Plus } from 'lucide-react';
+import { FolderOpen, Folder, Layers, Plus } from 'lucide-react';
 
 interface CategorySidebarProps {
   categories: string[];
@@ -24,8 +24,8 @@ export const CategorySidebar: React.FC<CategorySidebarProps> = ({
     <div className="w-64 border-r border-gray-800 h-full overflow-y-auto" style={{ background: '#0a0d13' }}>
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white flex items-center space-x-2">
-            <Music className="h-5 w-5" />
+          <h3 className="text-lg font-mono text-white flex items-center space-x-2">
+            <Layers className="h-5 w-5" />
             <span>Categories</span>
           </h3>
           <button
