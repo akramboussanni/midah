@@ -129,7 +129,7 @@ pub async fn stop_all_sounds() -> Result<(), String> {
     Ok(())
 }
 
-//todo finish categories
+
 #[tauri::command]
 pub async fn get_categories() -> Result<Vec<database::Category>, String> {
     database::get_categories().map_err(|e| e.to_string())

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { confirm as tauriConfirm } from '@tauri-apps/plugin-dialog';
 import { FolderOpen, Folder, Layers, Plus } from 'lucide-react';
 
 interface CategorySidebarProps {
@@ -7,6 +8,7 @@ interface CategorySidebarProps {
   onCategorySelect: (category: string) => void;
   soundCounts: Record<string, number>;
   onCreateCategory: (categoryName: string) => void;
+  onDeleteCategory?: (categoryNameOrId: string) => void;
 }
 
 export const CategorySidebar: React.FC<CategorySidebarProps> = ({
@@ -15,10 +17,14 @@ export const CategorySidebar: React.FC<CategorySidebarProps> = ({
   onCategorySelect,
   soundCounts,
   onCreateCategory,
+  onDeleteCategory,
 }) => {
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const allCategories = ['All', ...Array.from(new Set(categories)).sort()];
+  const baseCategories = Array.from(new Set(categories)).sort();
+  const hasUncategorized = baseCategories.includes('Uncategorized');
+  const pinned = ['All', ...(hasUncategorized ? ['Uncategorized'] : [])];
+  const others = baseCategories.filter(c => c !== 'Uncategorized');
 
   return (
     <div className="w-64 border-r border-gray-800 h-full overflow-y-auto" style={{ background: '#0a0d13' }}>
@@ -84,21 +90,18 @@ export const CategorySidebar: React.FC<CategorySidebarProps> = ({
         )}
         
         <div className="space-y-1">
-          {allCategories.map((category) => {
+          {[...pinned].map((category) => {
             const isSelected = selectedCategory === category;
             const count = soundCounts[category] || 0;
             
             return (
-              <button
-                key={category}
-                onClick={() => onCategorySelect(category)}
-                className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors duration-200 text-left ${
-                  isSelected
-                    ? 'bg-gray-800/50 text-white'
-                    : 'text-gray-300 hover:bg-gray-800/30 hover:text-white'
-                }`}
-              >
-                <div className="flex items-center space-x-3">
+              <div key={category} className={`flex items-center justify-between p-2 rounded-lg transition-colors duration-200 ${
+                isSelected ? 'bg-gray-800/50' : 'hover:bg-gray-800/30'
+              }`}>
+                <button
+                  onClick={() => onCategorySelect(category)}
+                  className={`flex-1 flex items-center gap-3 text-left ${isSelected ? 'text-white' : 'text-gray-300 hover:text-white'}`}
+                >
                   {isSelected ? (
                     <FolderOpen className="h-4 w-4 flex-shrink-0" />
                   ) : (
@@ -107,15 +110,83 @@ export const CategorySidebar: React.FC<CategorySidebarProps> = ({
                   <span className="font-mono text-sm truncate">
                     {category === 'All' ? 'All Sounds' : category || 'Uncategorized'}
                   </span>
-                </div>
-                <span className={`text-xs px-2 py-1 rounded-full ${
-                  isSelected 
-                    ? 'bg-gray-700 text-white' 
-                    : 'bg-gray-800 text-gray-400'
+                </button>
+                <span className={`text-xs px-2 py-1 rounded-full mr-2 ${
+                  isSelected ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-400'
                 }`}>
                   {count}
                 </span>
-              </button>
+                {category !== 'All' && category !== 'Uncategorized' && onDeleteCategory && (
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const confirmed = await tauriConfirm(`Delete category "${category}"?`, {
+                        title: 'Delete category',
+                        kind: 'warning',
+                        okLabel: 'Delete',
+                        cancelLabel: 'Cancel',
+                      });
+                      if (!confirmed) return;
+                      onDeleteCategory(category);
+                    }}
+                    className="p-1 rounded hover:bg-red-900/30 text-red-400 hover:text-red-300"
+                    title="Delete category"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          {others.length > 0 && (
+            <div className="my-3 border-t border-gray-800" />
+          )}
+          {others.map((category) => {
+            const isSelected = selectedCategory === category;
+            const count = soundCounts[category] || 0;
+
+            return (
+              <div key={category} className={`flex items-center justify-between p-2 rounded-lg transition-colors duration-200 ${
+                isSelected ? 'bg-gray-800/50' : 'hover:bg-gray-800/30'
+              }`}>
+                <button
+                  onClick={() => onCategorySelect(category)}
+                  className={`flex-1 flex items-center gap-3 text-left ${isSelected ? 'text-white' : 'text-gray-300 hover:text-white'}`}
+                >
+                  {isSelected ? (
+                    <FolderOpen className="h-4 w-4 flex-shrink-0" />
+                  ) : (
+                    <Folder className="h-4 w-4 flex-shrink-0" />
+                  )}
+                  <span className="font-mono text-sm truncate">
+                    {category}
+                  </span>
+                </button>
+                <span className={`text-xs px-2 py-1 rounded-full mr-2 ${
+                  isSelected ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-400'
+                }`}>
+                  {count}
+                </span>
+                {onDeleteCategory && (
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const confirmed = await tauriConfirm(`Delete category "${category}"?`, {
+                        title: 'Delete category',
+                        kind: 'warning',
+                        okLabel: 'Delete',
+                        cancelLabel: 'Cancel',
+                      });
+                      if (!confirmed) return;
+                      onDeleteCategory(category);
+                    }}
+                    className="p-1 rounded hover:bg-red-900/30 text-red-400 hover:text-red-300"
+                    title="Delete category"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>

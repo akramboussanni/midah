@@ -7,6 +7,7 @@ mod database;
 mod soundboard;
 mod hotkeys;
 mod app_handlers;
+mod updater;
 
 use external::*;
 
@@ -15,6 +16,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use std::sync::Mutex;
 use crate::hotkeys::{init_hotkeys, HotkeyAction};
+
+pub const GITHUB_REPO: &str = "akramboussanni/midah";
 
 
 
@@ -45,6 +48,14 @@ fn main() {
             let mut event_receiver = init_hotkeys();
 
             let app_handle = app.handle().clone();
+
+            // Background updater check on startup
+            let app_for_update = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                // small delay to let UI boot
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                crate::updater::check_for_update(app_for_update).await;
+            });
             std::thread::spawn(move || {
                 loop {
                     if let Some(action) = event_receiver.blocking_recv() {
@@ -134,6 +145,7 @@ fn main() {
             external::youtube::download_video,
             external::youtube::update_youtube_api_key,
             external::youtube::get_youtube_api_key,
+            updater::download_and_install_update,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri app")

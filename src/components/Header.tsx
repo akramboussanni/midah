@@ -1,6 +1,8 @@
 import { Music, Sparkles, Mic, Volume2, Minus, X, Maximize2, Minimize2 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useUpdater } from '../hooks/useUpdater';
 
 interface HeaderProps {
   virtualVolume: number;
@@ -18,7 +20,9 @@ export const Header = ({
   onStopAllSounds,
 }: HeaderProps) => {
   const [isMaximized, setIsMaximized] = useState(false);
-  const [appVersion, setAppVersion] = useState<string>('0.1.0');
+  const [appVersion, setAppVersion] = useState<string>('0.0.0');
+  const { update, visible, dismiss, progress } = useUpdater();
+  const [showDialog, setShowDialog] = useState(false);
 
 
   useEffect(() => {
@@ -74,8 +78,17 @@ export const Header = ({
           </div>
           <span className="text-sm font-mono text-gray-300">Midah Soundboard</span>
         </div>
-        
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center space-x-2">
+          {visible && update && (
+            <button
+              onClick={() => setShowDialog(true)}
+              className="px-2 py-0.5 text-xs font-mono bg-blue-700 hover:bg-blue-600 text-white rounded mr-1"
+              data-tauri-drag-region="none"
+              title={`Update to v${update.version}`}
+            >
+              Update v{update.version}
+            </button>
+          )}
           <button
             onClick={handleMinimize}
             className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors duration-200"
@@ -159,6 +172,56 @@ export const Header = ({
           </div>
         </div>
       </div>
+      {showDialog && update && typeof document !== 'undefined' && createPortal(
+        (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center" data-tauri-drag-region="none">
+            <div className="absolute inset-0 bg-black/70" onClick={() => { setShowDialog(false); }} />
+            <div className="relative bg-gray-900 border border-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-base font-mono font-semibold">Update v{update.version}</h3>
+                <button onClick={() => { setShowDialog(false); dismiss(); }} className="text-gray-400 hover:text-gray-200">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="max-h-[50vh] overflow-y-auto p-3 rounded bg-gray-800/40 border border-gray-700">
+                <pre className="whitespace-pre-wrap break-words text-xs font-mono text-gray-200">{update.changelog}</pre>
+              </div>
+              <div className="flex items-center gap-2 mt-3 justify-end">
+                <button onClick={() => { setShowDialog(false); dismiss(); }} className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded font-mono">
+                  Later
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      if (update.msi_url) {
+                        await invoke('download_and_install_update', { msiUrl: update.msi_url });
+                      }
+                    } catch (e) {
+                      console.error('Failed to update:', e);
+                      alert(`Failed to start update: ${e}`);
+                    }
+                  }}
+                  disabled={['downloading','launching','launched'].includes(progress?.status || '')}
+                  className={`px-3 py-1 text-xs rounded font-mono text-white ${
+                    ['downloading','launching','launched'].includes(progress?.status || '')
+                      ? 'bg-blue-900 cursor-not-allowed'
+                      : 'bg-blue-700 hover:bg-blue-600'
+                  }`}
+                >
+                  {progress?.status === 'downloading'
+                    ? 'Downloading...'
+                    : progress?.status === 'launching'
+                    ? 'Launching...'
+                    : progress?.status === 'launched'
+                    ? 'Installer launched'
+                    : 'Update Now'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ),
+        document.body
+      )}
     </header>
   );
 }; 

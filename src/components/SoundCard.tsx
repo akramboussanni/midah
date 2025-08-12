@@ -73,7 +73,6 @@ export const SoundCard = ({
   }, [isPlaying]);
 
   const duration = sound.duration || 0;
-  // progress no longer used here; handled inside PlaybackProgress
 
   const handleSeek = (newTime: number) => {
     if (!isPlaying || !duration || !onSeek) return;

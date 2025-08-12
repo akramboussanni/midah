@@ -13,6 +13,7 @@
 
 ### Core Features
 
+- **Autoupdater**: You don't have to update everything yourself! Midah will look for new updates and prompt you to install them.
 - **Hotkey System**: Play or stop sounds without even opening the app.
 - **Sound Categorization**: Order your sounds with categories so your app doesn't stay messy.
 - **Playback volume**: Set an output device to hear your own audios. Control output, playback and individual audio volume.

@@ -140,7 +140,6 @@ impl HotkeyManager {
                 }
             }
             EventType::KeyRelease(key) => {
-                // Update modifier state for modifier keys
                 self.update_modifier_state(key, false);
             }
             _ => {}

@@ -397,6 +397,17 @@ function App() {
                 onCreateCategory={(categoryName) => {
                   setSelectedCategory(categoryName);
                 }}
+                  onDeleteCategory={async (categoryName) => {
+                    try {
+                      await invoke('remove_category', { id: categoryName });
+                      if (selectedCategory === categoryName) {
+                        setSelectedCategory('All');
+                      }
+                      await loadSounds();
+                    } catch (e) {
+                      console.error('Failed to remove category', e);
+                    }
+                  }}
               />
               <div className="flex-1 overflow-y-auto">
                 <div className="container mx-auto px-6 py-8">
