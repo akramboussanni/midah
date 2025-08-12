@@ -86,11 +86,22 @@ pub async fn add_sound(request: AddSoundRequest) -> Result<SoundResponse, String
 }
 
 #[tauri::command]
-pub async fn remove_sound(id: String) -> Result<(), String> {
+pub async fn remove_sound(id: String, delete_file: Option<bool>) -> Result<(), String> {
     let _ = crate::audio::stop_sound_command(id.clone()).await;
-    
+    let delete_file = delete_file.unwrap_or(false);
+    if delete_file {
+        if let Some(sound) = database::get_sound_by_id(&id).map_err(|e| e.to_string())? {
+            if let Err(e) = std::fs::remove_file(&sound.file_path) {
+                // If file doesn't exist, still proceed with DB removal
+                let kind = e.kind();
+                if kind != std::io::ErrorKind::NotFound {
+                    return Err(format!("Failed to delete file '{}': {}", sound.file_path, e));
+                }
+            }
+        }
+    }
     database::remove_sound(&id).map_err(|e| e.to_string())?;
-    info!("Removed sound with id: {}", id);
+    info!("Removed sound with id: {} (delete_file: {})", id, delete_file);
     Ok(())
 }
 

@@ -75,11 +75,11 @@ export const useSounds = () => {
     }
   }, []);
 
-  const handleRemoveSound = async (soundId: string) => {
+  const handleRemoveSound = async (soundId: string, deleteFile: boolean = false) => {
     try {
       console.log('Removing sound:', soundId);
       
-      const result = await invoke('remove_sound', { id: soundId });
+      const result = await invoke('remove_sound', { id: soundId, delete_file: deleteFile });
       console.log('Remove result:', result);
       
       setSounds(prevSounds => prevSounds.filter(sound => sound.id !== soundId));

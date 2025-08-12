@@ -131,7 +131,6 @@ pub async fn download_and_install_update(app: AppHandle, msi_url: String) -> Res
 
     let _ = app.emit("update-progress", json!({"status":"downloaded"}));
 
-    // Use full UI and log to temp file for troubleshooting when installer closes quickly
     let mut log_path: PathBuf = std::env::temp_dir();
     log_path.push("midah-install.log");
     let args = vec![

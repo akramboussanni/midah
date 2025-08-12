@@ -12,7 +12,7 @@ interface SoundCardProps {
   onPlay: (soundId: string, localOnly?: boolean) => void;
   onStop: (soundId: string) => void;
   onVolumeChange: (soundId: string, volume: number) => void;
-  onRemove: (soundId: string) => void;
+  onRemove: (soundId: string, deleteFile: boolean) => void | Promise<void>;
   onPlayLocal: (soundId: string) => void;
   onSetStartPosition: (soundId: string, position: number) => void;
   onSetHotkey: (soundId: string, hotkey: Hotkey) => void;

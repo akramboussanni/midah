@@ -9,7 +9,7 @@ interface SoundCardMenuProps {
   sound: Sound;
   anchorRect: DOMRect | null;
   onClose: () => void;
-  onRemove: (soundId: string) => void;
+  onRemove: (soundId: string, deleteFile: boolean) => void | Promise<void>;
   onPlayLocal: (soundId: string) => void;
   onSetStartPosition: (soundId: string, position: number) => void;
   onSetHotkey: (soundId: string, hotkey: Hotkey) => void;
@@ -53,6 +53,7 @@ export const SoundCardMenu: React.FC<SoundCardMenuProps> = ({
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   const duration = sound.duration || 0;
 
@@ -303,16 +304,47 @@ export const SoundCardMenu: React.FC<SoundCardMenuProps> = ({
         </button>
 
 
-        <button
-          onClick={() => {
-            onRemove(sound.id);
-            onClose();
-          }}
-          className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-gray-800 flex items-center space-x-2"
-        >
-          <Trash2 className="h-4 w-4" />
-          <span>Remove</span>
-        </button>
+        {!showRemoveConfirm ? (
+          <button
+            onClick={() => {
+              setShowRemoveConfirm(true);
+            }}
+            className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-gray-800 flex items-center space-x-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            <span>Remove</span>
+          </button>
+        ) : (
+          <div className="px-4 py-3 border-t border-gray-800 space-y-2">
+            <div className="text-sm text-gray-300">Remove this sound?</div>
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  onRemove(sound.id, false);
+                  onClose();
+                }}
+                className="w-full px-3 py-2 text-left text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 rounded"
+              >
+                Remove from Midah (keep file)
+              </button>
+              <button
+                onClick={() => {
+                  onRemove(sound.id, true);
+                  onClose();
+                }}
+                className="w-full px-3 py-2 text-left text-xs bg-red-600 hover:bg-red-700 text-white rounded"
+              >
+                Delete file from disk
+              </button>
+              <button
+                onClick={() => setShowRemoveConfirm(false)}
+                className="w-full px-3 py-2 text-left text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
 
