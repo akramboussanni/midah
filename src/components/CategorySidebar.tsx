@@ -86,9 +86,7 @@ export const CategorySidebar: React.FC<CategorySidebarProps> = ({
         <div className="space-y-1">
           {allCategories.map((category) => {
             const isSelected = selectedCategory === category;
-            const count = category === 'All' 
-              ? Object.values(soundCounts).reduce((sum, count) => sum + count, 0)
-              : soundCounts[category] || 0;
+            const count = soundCounts[category] || 0;
             
             return (
               <button

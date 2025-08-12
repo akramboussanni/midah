@@ -100,6 +100,7 @@ function App() {
     }).length;
     return acc;
   }, {} as Record<string, number>);
+  soundCounts['All'] = sounds.length;
 
   (window as any).debugAudioStatus = debugAudioStatus;
 

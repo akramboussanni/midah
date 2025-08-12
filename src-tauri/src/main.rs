@@ -32,6 +32,7 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(audio::AudioManager::new().expect("Failed to initialize AudioManager")))
         .setup(move |app| {
             let db_path = app.path().app_data_dir().unwrap().join("soundboard.db");
