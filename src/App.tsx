@@ -31,6 +31,7 @@ function App() {
   const [showVbCablePrompt, setShowVbCablePrompt] = useState(false);
   const [vbCableInstallPressed, setVbCableInstallPressed] = useState(false);
   const [showAllOutputDevices, setShowAllOutputDevices] = useState(false);
+  const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [settingsTab, setSettingsTab] = useState<'devices' | 'general' | 'hotkeys'>('devices');
   const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [showCaptureInfoDialog, setShowCaptureInfoDialog] = useState(false);
@@ -98,7 +99,7 @@ function App() {
     return matchesSearch && matchesCategory;
   });
 
-  const categorySet = new Set<string>();
+  const categorySet = new Set<string>(dbCategories);
   for (const s of sounds) {
     const list = s.categories && s.categories.length > 0 ? s.categories : (s.category ? [s.category] : []);
     if (list.length === 0) categorySet.add('Uncategorized');
@@ -158,6 +159,7 @@ function App() {
     loadYoutubeApiKey();
     loadConcurrentAudioSetting();
     loadShowAllOutputDevicesSetting();
+    loadCategories();
   }, []);
 
   useEffect(() => {
@@ -199,6 +201,16 @@ function App() {
     
     checkForVirtualDevices();
   }, [audioDevices, showVbCablePrompt, showAllOutputDevices]);
+
+  const loadCategories = async () => {
+    try {
+      const cats = await invoke<any[]>('get_categories');
+      const names = Array.isArray(cats) ? cats.map((c: any) => c?.name).filter(Boolean) : [];
+      setDbCategories(Array.from(new Set(names)));
+    } catch (error) {
+      console.error('Failed to load categories:', error);
+    }
+  };
 
   const loadConcurrentAudioSetting = async () => {
     try {
@@ -394,20 +406,27 @@ function App() {
                 selectedCategory={selectedCategory}
                 onCategorySelect={setSelectedCategory}
                 soundCounts={soundCounts}
-                onCreateCategory={(categoryName) => {
-                  setSelectedCategory(categoryName);
+                onCreateCategory={async (categoryName) => {
+                  try {
+                    await invoke('add_category', { name: categoryName, color: null });
+                    await loadCategories();
+                    setSelectedCategory(categoryName);
+                  } catch (e) {
+                    console.error('Failed to add category', e);
+                  }
                 }}
-                  onDeleteCategory={async (categoryName) => {
-                    try {
-                      await invoke('remove_category', { id: categoryName });
-                      if (selectedCategory === categoryName) {
-                        setSelectedCategory('All');
-                      }
-                      await loadSounds();
-                    } catch (e) {
-                      console.error('Failed to remove category', e);
+                onDeleteCategory={async (categoryName) => {
+                  try {
+                    await invoke('remove_category', { id: categoryName });
+                    if (selectedCategory === categoryName) {
+                      setSelectedCategory('All');
                     }
-                  }}
+                    await loadCategories();
+                    await loadSounds();
+                  } catch (e) {
+                    console.error('Failed to remove category', e);
+                  }
+                }}
               />
               <div className="flex-1 overflow-y-auto">
                 <div className="container mx-auto px-6 py-8">

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { confirm as tauriConfirm } from '@tauri-apps/plugin-dialog';
+import ReactDOM from 'react-dom';
 import { FolderOpen, Folder, Layers, Plus } from 'lucide-react';
 
 interface CategorySidebarProps {
@@ -21,12 +21,14 @@ export const CategorySidebar: React.FC<CategorySidebarProps> = ({
 }) => {
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [confirmDeleteFor, setConfirmDeleteFor] = useState<string | null>(null);
   const baseCategories = Array.from(new Set(categories)).sort();
   const hasUncategorized = baseCategories.includes('Uncategorized');
   const pinned = ['All', ...(hasUncategorized ? ['Uncategorized'] : [])];
   const others = baseCategories.filter(c => c !== 'Uncategorized');
 
   return (
+    <>
     <div className="w-64 border-r border-gray-800 h-full overflow-y-auto" style={{ background: '#0a0d13' }}>
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">
@@ -120,14 +122,7 @@ export const CategorySidebar: React.FC<CategorySidebarProps> = ({
                   <button
                     onClick={async (e) => {
                       e.stopPropagation();
-                      const confirmed = await tauriConfirm(`Delete category "${category}"?`, {
-                        title: 'Delete category',
-                        kind: 'warning',
-                        okLabel: 'Delete',
-                        cancelLabel: 'Cancel',
-                      });
-                      if (!confirmed) return;
-                      onDeleteCategory(category);
+                      setConfirmDeleteFor(category);
                     }}
                     className="p-1 rounded hover:bg-red-900/30 text-red-400 hover:text-red-300"
                     title="Delete category"
@@ -171,14 +166,7 @@ export const CategorySidebar: React.FC<CategorySidebarProps> = ({
                   <button
                     onClick={async (e) => {
                       e.stopPropagation();
-                      const confirmed = await tauriConfirm(`Delete category "${category}"?`, {
-                        title: 'Delete category',
-                        kind: 'warning',
-                        okLabel: 'Delete',
-                        cancelLabel: 'Cancel',
-                      });
-                      if (!confirmed) return;
-                      onDeleteCategory(category);
+                      setConfirmDeleteFor(category);
                     }}
                     className="p-1 rounded hover:bg-red-900/30 text-red-400 hover:text-red-300"
                     title="Delete category"
@@ -192,5 +180,30 @@ export const CategorySidebar: React.FC<CategorySidebarProps> = ({
         </div>
       </div>
     </div>
+
+      {confirmDeleteFor && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setConfirmDeleteFor(null)} />
+          <div className="relative bg-gray-900 border border-gray-800 rounded-lg shadow-xl max-w-sm w-full mx-4 p-4 space-y-3">
+            <div className="text-sm text-gray-200 font-mono">Delete category "{confirmDeleteFor}"?</div>
+            <div className="space-y-2">
+              <button
+                onClick={async () => { if (onDeleteCategory && confirmDeleteFor) { await onDeleteCategory(confirmDeleteFor); } setConfirmDeleteFor(null); }}
+                className="w-full px-3 py-2 text-left text-xs bg-red-600 hover:bg-red-700 text-white rounded"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setConfirmDeleteFor(null)}
+                className="w-full px-3 py-2 text-left text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 };

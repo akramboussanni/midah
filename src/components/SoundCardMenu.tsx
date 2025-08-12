@@ -53,7 +53,7 @@ export const SoundCardMenu: React.FC<SoundCardMenuProps> = ({
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
-  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [showRemoveDialog, setShowRemoveDialog] = useState(false);
 
   const duration = sound.duration || 0;
 
@@ -304,49 +304,45 @@ export const SoundCardMenu: React.FC<SoundCardMenuProps> = ({
         </button>
 
 
-        {!showRemoveConfirm ? (
-          <button
-            onClick={() => {
-              setShowRemoveConfirm(true);
-            }}
-            className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-gray-800 flex items-center space-x-2"
-          >
-            <Trash2 className="h-4 w-4" />
-            <span>Remove</span>
-          </button>
-        ) : (
-          <div className="px-4 py-3 border-t border-gray-800 space-y-2">
-            <div className="text-sm text-gray-300">Remove this sound?</div>
+        <button
+          onClick={() => setShowRemoveDialog(true)}
+          className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-gray-800 flex items-center space-x-2"
+        >
+          <Trash2 className="h-4 w-4" />
+          <span>Remove</span>
+        </button>
+      </div>
+
+
+      {showRemoveDialog && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowRemoveDialog(false)} />
+          <div className="relative bg-gray-900 border border-gray-800 rounded-lg shadow-xl max-w-sm w-full mx-4 p-4 space-y-3">
+            <div className="text-sm text-gray-200 font-mono">Remove "{sound.name}"?</div>
             <div className="space-y-2">
               <button
-                onClick={() => {
-                  onRemove(sound.id, false);
-                  onClose();
-                }}
+                onClick={async () => { await onRemove(sound.id, false); setShowRemoveDialog(false); onClose(); }}
                 className="w-full px-3 py-2 text-left text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 rounded"
               >
                 Remove from Midah (keep file)
               </button>
               <button
-                onClick={() => {
-                  onRemove(sound.id, true);
-                  onClose();
-                }}
+                onClick={async () => { await onRemove(sound.id, true); setShowRemoveDialog(false); onClose(); }}
                 className="w-full px-3 py-2 text-left text-xs bg-red-600 hover:bg-red-700 text-white rounded"
               >
                 Delete file from disk
               </button>
               <button
-                onClick={() => setShowRemoveConfirm(false)}
+                onClick={() => setShowRemoveDialog(false)}
                 className="w-full px-3 py-2 text-left text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded"
               >
                 Cancel
               </button>
             </div>
           </div>
-        )}
-      </div>
-
+        </div>,
+        document.body
+      )}
 
       {showHotkeyInput && (
         <div className="px-4 py-2">
