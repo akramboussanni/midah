@@ -1,7 +1,7 @@
 {
   "$schema": "https://tauri.app/v2/tauri.schema.json",
   "productName": "Midah Soundboard",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "identifier": "midah",
   "mainBinaryName": "Midah Soundboard",
   "build": {
@@ -32,7 +32,9 @@
   "bundle": {
     "active": true,
     "icon": [
-      "static/logo.png"
+      "icons/icon.ico",
+      "icons/32x32.png",
+      "icons/128x128.png"
     ],
     "targets": [
       "msi"
