@@ -8,7 +8,7 @@
 </div>
 
 <div align="center">
-  <p></p>
+  <h3>  ^^^^^^^^ <b>press <a href="https://github.com/akramboussanni/midah/releases/latest">this</a> to download</b> ^^^^^^^^</h3>
 </div>
 
 ### Core Features
