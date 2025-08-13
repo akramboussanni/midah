@@ -291,12 +291,10 @@ impl YouTubeService {
                         if line.contains('%') {
                             if let Some(percent_str) = line.split_whitespace().find(|s| s.ends_with('%')) {
                                 if let Ok(percent) = percent_str.trim_end_matches('%').parse::<f32>() {
-                                    // Mark that we've seen progress
                                     if !has_seen_progress {
                                         has_seen_progress = true;
                                     }
                                     
-                                    // Check if we've reached 100%
                                     if percent >= 100.0 && !has_reached_100 {
                                         has_reached_100 = true;
                                     }

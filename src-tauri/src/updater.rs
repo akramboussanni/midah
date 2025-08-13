@@ -132,59 +132,57 @@ pub async fn download_and_install_update(app: AppHandle, msi_url: String) -> Res
 
     let mut log_path: PathBuf = std::env::temp_dir();
     log_path.push("midah-install.log");
-    let args = vec![
-        "/i".to_string(),
-        target_path.to_string_lossy().to_string(),
-        "/L*V".to_string(),
-        log_path.to_string_lossy().to_string(),
-        "/norestart".to_string(),
-    ];
-
-    let _ = app.emit("update-progress", json!({"status":"installing", "logPath": log_path.to_string_lossy()}));
-
-    let status = tokio::process::Command::new("msiexec")
-        .args(args.clone())
-        .status()
-        .await
-        .map_err(|e| format!("Failed to run installer: {}", e))?;
-
-    if !status.success() {
-        let _ = app.emit("update-progress", json!({"status":"error", "message": format!("Installer exited with status {:?}", status.code())}));
-        return Err(format!("Installer failed with status {:?}", status.code()));
-    }
-
-    let _ = app.emit("update-progress", json!({"status":"installed"}));
 
     let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
+
     let mut signal_path: PathBuf = std::env::temp_dir();
     signal_path.push(format!("midah-launched-{}.flag", chrono::Utc::now().timestamp_millis()));
     let signal_str = signal_path.to_string_lossy().to_string();
     let _ = async_fs::remove_file(&signal_path).await;
 
-    let _ = app.emit("update-progress", json!({"status":"launching_new"}));
+    let mut helper_path: PathBuf = std::env::temp_dir();
+    helper_path.push("midah-update-helper.cmd");
 
-    let _child = tokio::process::Command::new(&exe_path)
-        .arg(format!("--update-launched-signal={}", signal_str))
+    let helper_contents = format!(
+        concat!(
+            "@echo off\r\n",
+            "set MSI=\"{msi}\"\r\n",
+            "set LOG=\"{log}\"\r\n",
+            "set EXE=\"{exe}\"\r\n",
+            "set SIGNAL=\"{signal}\"\r\n",
+            "timeout /t 1 /nobreak > NUL\r\n",
+            "taskkill /IM \"Midah Soundboard.exe\" /F /T > NUL 2>&1\r\n",
+            "timeout /t 1 /nobreak > NUL\r\n",
+            "msiexec /i %MSI% /L*V %LOG% /norestart /qb-\r\n",
+            "set EXITCODE=%ERRORLEVEL%\r\n",
+            "if \"%EXITCODE%\"==\"0\" (\r\n",
+            "  start \"\" %EXE% --update-launched-signal=%SIGNAL%\r\n",
+            ")\r\n",
+            "exit /b %EXITCODE%\r\n"
+        ),
+        msi = target_path.to_string_lossy(),
+        log = log_path.to_string_lossy(),
+        exe = exe_path.to_string_lossy(),
+        signal = signal_str,
+    );
+
+    async_fs::write(&helper_path, helper_contents)
+        .await
+        .map_err(|e| format!("Failed to write helper script: {}", e))?;
+
+    let _ = app.emit("update-progress", json!({"status":"launching_installer", "logPath": log_path.to_string_lossy()}));
+
+    let helper_str = helper_path.to_string_lossy().to_string();
+    let _ = tokio::process::Command::new("cmd")
+        .arg("/C")
+        .arg("start")
+        .arg("")
+        .arg(&helper_str)
         .spawn()
-        .map_err(|e| format!("Failed to launch new app: {}", e))?;
+        .map_err(|e| format!("Failed to start update helper: {}", e))?;
 
-    let mut launched_ok = false;
-    for _ in 0..40 {
-        if async_fs::metadata(&signal_path).await.is_ok() {
-            launched_ok = true;
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-    }
-
-    if launched_ok {
-        let _ = app.emit("update-progress", json!({"status":"new_launched"}));
-        app.exit(0);
-        Ok(())
-    } else {
-        let _ = app.emit("update-progress", json!({"status":"launch_failed"}));
-        Err("New app did not signal readiness; leaving current app running".to_string())
-    }
+    app.exit(0);
+    Ok(())
 }
 
 

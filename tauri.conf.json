@@ -1,7 +1,7 @@
 {
   "$schema": "https://tauri.app/v2/tauri.schema.json",
   "productName": "Midah Soundboard",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "identifier": "midah",
   "mainBinaryName": "Midah Soundboard",
   "build": {

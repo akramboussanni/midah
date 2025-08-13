@@ -293,7 +293,6 @@ impl DependencyManager {
         let cursor = Cursor::new(bytes);
         let mut archive = ZipArchive::new(cursor).context("Failed to read zip archive")?;
         
-        // Extract all files
         for i in 0..archive.len() {
             let mut file = archive.by_index(i).context("Failed to access archive file")?;
             let outpath = extract_dir.join(file.name());
