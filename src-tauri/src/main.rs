@@ -30,7 +30,7 @@ fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    std::thread::spawn(|| { audio::get_audio_manager(); });
+            std::thread::spawn(|| { audio::get_audio_manager(); });
     audio::get_audio_engine();
 
     tauri::Builder::default()
@@ -38,6 +38,12 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(audio::AudioManager::new().expect("Failed to initialize AudioManager")))
         .setup(move |app| {
+            if let Some(arg) = std::env::args().find(|a| a.starts_with("--update-launched-signal=")) {
+                let path = arg.splitn(2, '=').nth(1).unwrap_or("");
+                if !path.is_empty() {
+                    let _ = std::fs::write(path, b"ok");
+                }
+            }
             let db_path = app.path().app_data_dir().unwrap().join("soundboard.db");
             database::init_database(&db_path)?;
             let youtube_api_key = database::get_setting("youtube_api_key")
@@ -49,10 +55,8 @@ fn main() {
 
             let app_handle = app.handle().clone();
 
-            // Background updater check on startup
             let app_for_update = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                // small delay to let UI boot
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                 crate::updater::check_for_update(app_for_update).await;
             });

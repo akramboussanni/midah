@@ -259,7 +259,8 @@ pub fn set_sound_categories(sound_id: &str, categories: &[String]) -> Result<()>
 
 pub fn remove_sound(id: &str) -> Result<()> {
     let conn = get_connection()?;
-    
+    let _ = conn.execute("DELETE FROM sound_categories WHERE sound_id = ?", params![id]);
+    let _ = conn.execute("DELETE FROM hotkey_bindings WHERE sound_id = ?", params![id]);
     conn.execute("DELETE FROM sounds WHERE id = ?", params![id])?;
     
     info!("Removed sound with id: {}", id);
@@ -268,6 +269,8 @@ pub fn remove_sound(id: &str) -> Result<()> {
 
 pub fn remove_all_sounds() -> Result<()> {
     let conn = get_connection()?;
+    let _ = conn.execute("DELETE FROM sound_categories", []);
+    let _ = conn.execute("DELETE FROM hotkey_bindings", []);
     conn.execute("DELETE FROM sounds", [])?;
     info!("Removed all sounds from database");
     Ok(())

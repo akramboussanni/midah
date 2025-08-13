@@ -77,16 +77,17 @@ export const useSounds = () => {
 
   const handleRemoveSound = async (soundId: string, deleteFile: boolean = false) => {
     try {
-      console.log('Removing sound:', soundId);
-      
+      console.log('[useSounds] handleRemoveSound called', { soundId, deleteFile });
       const result = await invoke('remove_sound', { id: soundId, delete_file: deleteFile });
-      console.log('Remove result:', result);
-      
-      setSounds(prevSounds => prevSounds.filter(sound => sound.id !== soundId));
-      
-      console.log('Sound removed successfully');
+      console.log('[useSounds] backend remove_sound resolved', { soundId, deleteFile, result });
+      setSounds(prevSounds => {
+        const next = prevSounds.filter(sound => sound.id !== soundId);
+        console.log('[useSounds] sounds state updated after remove', { before: prevSounds.length, after: next.length });
+        return next;
+      });
+      console.log('[useSounds] Sound removed successfully', { soundId });
     } catch (error) {
-      console.error('Failed to remove sound:', error);
+      console.error('[useSounds] Failed to remove sound', { soundId, deleteFile, error });
     }
   };
 

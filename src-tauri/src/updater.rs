@@ -1,7 +1,6 @@
 use serde::Deserialize;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
-use tauri_plugin_shell::ShellExt;
 use serde_json::json;
 use tokio::fs as async_fs;
 use std::path::PathBuf;
@@ -141,23 +140,50 @@ pub async fn download_and_install_update(app: AppHandle, msi_url: String) -> Res
         "/norestart".to_string(),
     ];
 
-    let _ = app.emit("update-progress", json!({"status":"launching"}));
+    let _ = app.emit("update-progress", json!({"status":"installing", "logPath": log_path.to_string_lossy()}));
 
-    let spawn_res = app
-        .shell()
-        .command("msiexec")
-        .args(args)
-        .spawn();
+    let status = tokio::process::Command::new("msiexec")
+        .args(args.clone())
+        .status()
+        .await
+        .map_err(|e| format!("Failed to run installer: {}", e))?;
 
-    match spawn_res {
-        Ok(_child) => {
-            let _ = app.emit("update-progress", json!({"status":"launched", "logPath": log_path.to_string_lossy()}));
-            Ok(())
+    if !status.success() {
+        let _ = app.emit("update-progress", json!({"status":"error", "message": format!("Installer exited with status {:?}", status.code())}));
+        return Err(format!("Installer failed with status {:?}", status.code()));
+    }
+
+    let _ = app.emit("update-progress", json!({"status":"installed"}));
+
+    let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
+    let mut signal_path: PathBuf = std::env::temp_dir();
+    signal_path.push(format!("midah-launched-{}.flag", chrono::Utc::now().timestamp_millis()));
+    let signal_str = signal_path.to_string_lossy().to_string();
+    let _ = async_fs::remove_file(&signal_path).await;
+
+    let _ = app.emit("update-progress", json!({"status":"launching_new"}));
+
+    let _child = tokio::process::Command::new(&exe_path)
+        .arg(format!("--update-launched-signal={}", signal_str))
+        .spawn()
+        .map_err(|e| format!("Failed to launch new app: {}", e))?;
+
+    let mut launched_ok = false;
+    for _ in 0..40 {
+        if async_fs::metadata(&signal_path).await.is_ok() {
+            launched_ok = true;
+            break;
         }
-        Err(e) => {
-            let _ = app.emit("update-progress", json!({"status":"error", "message": e.to_string()}));
-            Err(format!("Failed to launch installer: {}", e))
-        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+
+    if launched_ok {
+        let _ = app.emit("update-progress", json!({"status":"new_launched"}));
+        app.exit(0);
+        Ok(())
+    } else {
+        let _ = app.emit("update-progress", json!({"status":"launch_failed"}));
+        Err("New app did not signal readiness; leaving current app running".to_string())
     }
 }
 

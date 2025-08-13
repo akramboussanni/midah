@@ -502,7 +502,7 @@ function App() {
                     onPlay={(soundId) => handlePlaySound(soundId, false, concurrentAudio)}
                     onStop={handleStopSound}
                     onVolumeChange={handleSoundVolumeChange}
-                    onRemove={handleRemoveSound}
+                    onRemove={async (id, del) => { console.log('[App] onRemove forwarded', { id, del }); await handleRemoveSound(id, del); console.log('[App] onRemove completed', { id, del }); }}
                     onPlayLocal={(soundId) => handlePlaySound(soundId, true, concurrentAudio)}
                     onSetStartPosition={handleSetStartPosition}
                     onSetHotkey={(soundId, hotkey) => {
