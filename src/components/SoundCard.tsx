@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
-import { Play, Square, MoreVertical, Headphones, Clock } from 'lucide-react';
-import { VolumeSlider } from './VolumeSlider';
+import { useState, useEffect } from 'react';
+import { Play, Square, Headphones, Clock } from 'lucide-react';
 import { PlaybackProgress } from './PlaybackProgress';
+import { WaveformAnimation } from './WaveformAnimation';
+import { SoundVolumeSlider } from './SoundVolumeSlider';
+import { SoundMenuButton } from './SoundMenuButton';
 import { Sound, Hotkey } from '../types';
-import { SoundCardMenu } from './SoundCardMenu';
 
 interface SoundCardProps {
   sound: Sound;
@@ -17,6 +18,7 @@ interface SoundCardProps {
   onSetStartPosition: (soundId: string, position: number) => void;
   onSetHotkey: (soundId: string, hotkey: Hotkey) => void;
   onSetCategories: (soundId: string, categories: string[]) => void;
+  onSetDisplayName: (soundId: string, displayName: string | null) => void;
   availableCategories: string[];
   onSeek?: (soundId: string, position: number) => void;
   getPlaybackPosition?: (soundId: string) => Promise<number | null>;
@@ -52,21 +54,13 @@ export const SoundCard = ({
   onSetStartPosition,
   onSetHotkey,
   onSetCategories,
+  onSetDisplayName,
   availableCategories,
   onSeek,
   getPlaybackPosition,
   index 
 }: SoundCardProps) => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
-  const menuBtnRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (isMenuOpen && menuBtnRef.current) {
-      setAnchorRect(menuBtnRef.current.getBoundingClientRect());
-    }
-  }, [isMenuOpen]);
 
   useEffect(() => {
     if (!isPlaying) setCurrentTime(0);
@@ -80,45 +74,26 @@ export const SoundCard = ({
     setCurrentTime(newTime);
   };
 
-  const [isVolumeDragging, setIsVolumeDragging] = useState(false);
-
   return (
     <div
-      className={`sound-card p-6 card-hover slide-in ${isVolumeDragging ? 'volume-dragging' : ''}`}
-      style={{ animationDelay: `${index * 50}ms`, background: '#090b10' }}
+      className="sound-card p-6 card-hover slide-in"
+      style={{ animationDelay: `${index * 50}ms` }}
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="relative h-6 w-6 flex items-center justify-center">
-            <div className="flex items-center space-x-1 flex-shrink-0 h-4">
-              {[1, 2, 3, 4, 5].map((i) => {
-                const duration = (Math.random() * 0.3 + 0.5).toFixed(2);
-                const delay = (Math.random() * 0.3).toFixed(2);
-                const scale = (2.0 + Math.random() * 1.5).toFixed(2);
-
-                return (
-                  <div
-                    key={`${sound.id}-${i}`}
-                    className={`bg-white rounded-sm transition-transform ease-in-out ${
-                      isPlaying ? 'opacity-100' : 'opacity-30'
-                    }`}
-                    style={{
-                      width: '3px',
-                      height: '3px',
-                      transformOrigin: 'center',
-                      transform: isPlaying ? `scaleY(${scale})` : 'scaleY(1)',
-                      animation: isPlaying
-                        ? `waveMotion-${i} ${duration}s ease-in-out ${delay}s infinite`
-                        : 'none',
-                    }}
-                  />
-                );
-              })}
-            </div>
-          </div>
+          <WaveformAnimation isPlaying={isPlaying} />
 
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <h3 className="font-medium text-sm truncate font-mono">{sound.name}</h3>
+            <div className="flex flex-col min-w-0">
+              <h3 className="font-medium text-sm truncate font-mono">
+                {sound.display_name || sound.name}
+              </h3>
+              {sound.display_name && (
+                <p className="text-xs text-gray-500 truncate font-mono">
+                  {sound.name}
+                </p>
+              )}
+            </div>
             {isPlayingLocalOnly && (
               <div className="relative group">
                 <Headphones className="h-3 w-3 text-white flex-shrink-0 mr-2" />
@@ -142,29 +117,16 @@ export const SoundCard = ({
             )}
           </button>
 
-          <div className="relative">
-            <button
-              ref={menuBtnRef}
-              onClick={() => setIsMenuOpen((v) => !v)}
-              className="p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors duration-200 flex-shrink-0"
-              aria-label="More options"
-            >
-              <MoreVertical className="h-4 w-4 text-gray-400" />
-            </button>
-            {isMenuOpen && (
-              <SoundCardMenu
-                sound={sound}
-                anchorRect={anchorRect}
-                onClose={() => setIsMenuOpen(false)}
-                onRemove={onRemove}
-                onPlayLocal={onPlayLocal}
-                onSetStartPosition={onSetStartPosition}
-                onSetHotkey={onSetHotkey}
-                onSetCategories={onSetCategories}
-                availableCategories={availableCategories}
-              />
-            )}
-          </div>
+          <SoundMenuButton
+            sound={sound}
+            onRemove={onRemove}
+            onPlayLocal={onPlayLocal}
+            onSetStartPosition={onSetStartPosition}
+            onSetHotkey={onSetHotkey}
+            onSetCategories={onSetCategories}
+            onSetDisplayName={onSetDisplayName}
+            availableCategories={availableCategories}
+          />
         </div>
       </div>
 
@@ -189,10 +151,10 @@ export const SoundCard = ({
       )}
 
       <div className="space-y-3">
-        <VolumeSlider 
-          value={sound.volume} 
-          onChange={(v) => onVolumeChange(sound.id, v)}
-          onDraggingChange={setIsVolumeDragging}
+        <SoundVolumeSlider
+          soundId={sound.id}
+          volume={sound.volume}
+          onVolumeChange={onVolumeChange}
         />
         {sound.hotkey && (
           <div className="flex items-center justify-end">

@@ -4,6 +4,7 @@ import { Clock, Headphones, Trash2, Tag, ChevronDown, ChevronRight } from 'lucid
 import { Sound } from '../types';
 import { HotkeyInput } from './HotkeyInput';
 import { Hotkey } from '../types';
+import { VolumeSlider } from './VolumeSlider';
 
 interface SoundCardMenuProps {
   sound: Sound;
@@ -14,7 +15,9 @@ interface SoundCardMenuProps {
   onSetStartPosition: (soundId: string, position: number) => void;
   onSetHotkey: (soundId: string, hotkey: Hotkey) => void;
   onSetCategories: (soundId: string, categories: string[]) => void;
+  onSetDisplayName: (soundId: string, displayName: string | null) => void;
   availableCategories: string[];
+  onVolumeChange?: (soundId: string, volume: number) => void;
 }
 
 const formatTime = (seconds: number): string => {
@@ -43,13 +46,17 @@ export const SoundCardMenu: React.FC<SoundCardMenuProps> = ({
   onSetStartPosition,
   onSetHotkey,
   onSetCategories,
+  onSetDisplayName,
   availableCategories,
+  onVolumeChange,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [showStartPositionInput, setShowStartPositionInput] = useState(false);
   const [startPosition, setStartPosition] = useState(sound.startPosition || 0);
   const [showHotkeyInput, setShowHotkeyInput] = useState(false);
   const [hotkey, setHotkey] = useState<Hotkey | undefined>(sound.hotkey);
+  const [showDisplayNameInput, setShowDisplayNameInput] = useState(false);
+  const [displayName, setDisplayName] = useState(sound.display_name || '');
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
@@ -65,7 +72,12 @@ export const SoundCardMenu: React.FC<SoundCardMenuProps> = ({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (showRemoveDialog) return;
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      
+      // Check if the click is on the menu button itself (which should toggle the menu)
+      const target = event.target as Element;
+      const isMenuButton = target.closest && target.closest('[data-menu-button]');
+      
+      if (menuRef.current && !menuRef.current.contains(target) && !isMenuButton) {
         onClose();
       }
     };
@@ -148,6 +160,16 @@ export const SoundCardMenu: React.FC<SoundCardMenuProps> = ({
           />
         </div>
 
+        {/* Volume Slider - At the top */}
+        {onVolumeChange && (
+          <div className="px-4 py-2 border-t border-gray-800">
+            <div className="text-xs text-gray-400 font-mono mb-2">Volume</div>
+            <VolumeSlider
+              value={sound.volume}
+              onChange={(v) => onVolumeChange(sound.id, v)}
+            />
+          </div>
+        )}
 
         {duration > 0 && (
           <div className="px-4 py-2 text-xs text-gray-400 font-mono flex items-center gap-2">
@@ -166,6 +188,20 @@ export const SoundCardMenu: React.FC<SoundCardMenuProps> = ({
           <span>Set Hotkey</span>
           {sound.hotkey && (
             <span className="ml-auto text-xs text-gray-400 font-mono">{hotkeyToString(sound.hotkey)}</span>
+          )}
+        </button>
+
+        <button
+          onClick={() => {
+            setShowDisplayNameInput(!showDisplayNameInput);
+          }}
+          className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-800 flex items-center space-x-2"
+        >
+          <span>Set Display Name</span>
+          {sound.display_name && (
+            <span className="ml-auto text-xs text-gray-400 font-mono">
+              {sound.display_name}
+            </span>
           )}
         </button>
 
@@ -305,6 +341,8 @@ export const SoundCardMenu: React.FC<SoundCardMenuProps> = ({
         </button>
 
 
+
+
         <button
             onClick={() => { console.log('[SoundCardMenu] Remove clicked', { id: sound.id }); setShowRemoveDialog(true); }}
           className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-gray-800 flex items-center space-x-2"
@@ -348,6 +386,59 @@ export const SoundCardMenu: React.FC<SoundCardMenuProps> = ({
       {showHotkeyInput && (
         <div className="px-4 py-2">
           <HotkeyInput value={hotkey} onChange={handleHotkeyChange} />
+        </div>
+      )}
+
+      {showDisplayNameInput && (
+        <div className="space-y-3 p-3 rounded bg-gray-800/30 border border-gray-700/30">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium font-mono text-gray-300">Display Name</label>
+            <button
+              onClick={() => setShowDisplayNameInput(false)}
+              className="text-xs text-gray-400 hover:text-gray-300"
+            >
+              ×
+            </button>
+          </div>
+          
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Enter display name (leave empty to use filename)"
+              className="w-full px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded font-mono text-white placeholder-gray-400"
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  const finalName = displayName.trim() || null;
+                  onSetDisplayName(sound.id, finalName);
+                  setShowDisplayNameInput(false);
+                }
+              }}
+              autoFocus
+            />
+            <div className="flex space-x-1">
+              <button
+                onClick={() => {
+                  const finalName = displayName.trim() || null;
+                  onSetDisplayName(sound.id, finalName);
+                  setShowDisplayNameInput(false);
+                }}
+                className="flex-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded font-mono"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setDisplayName(sound.display_name || '');
+                  setShowDisplayNameInput(false);
+                }}
+                className="flex-1 px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded font-mono"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

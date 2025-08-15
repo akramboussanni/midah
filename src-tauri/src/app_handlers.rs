@@ -3,6 +3,7 @@ use crate::database;
 use crate::external;
 use tracing::info;
 use std::sync::Arc;
+use std::process::Command;
 
 static DEPENDENCY_MANAGER: std::sync::OnceLock<Arc<external::dependencies::DependencyManager>> = std::sync::OnceLock::new();
 
@@ -159,4 +160,33 @@ pub async fn update_yt_dlp(app: AppHandle) -> Result<String, String> {
             Err("yt-dlp not found. Please install it first.".to_string())
         }
     }
+}
+
+#[tauri::command]
+pub async fn open_browser(url: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(&["/C", "start", &url])
+            .spawn()
+            .map_err(|e| format!("Failed to open browser: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open browser: {}", e))?;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open browser: {}", e))?;
+    }
+    
+    Ok(())
 } 

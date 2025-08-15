@@ -16,7 +16,7 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({ value, onChange, onD
   };
 
   return (
-    <div className={`flex items-center space-x-2 p-2 rounded border volume-control ${
+    <div className={`flex items-center space-x-2 p-2 rounded border volume-control w-full ${
       isDragging ? 'bg-gray-700/50 border-gray-600/50' : 'bg-gray-800/30 border-gray-700/30'
     }`}>
       <Volume2 className={`h-3 w-3 flex-shrink-0 ${isDragging ? 'text-white' : 'text-gray-400'}`} />
@@ -40,7 +40,7 @@ export const VolumeSlider: React.FC<VolumeSliderProps> = ({ value, onChange, onD
         }}
         onMouseLeave={() => setDragging(false)}
         onClick={(e) => e.stopPropagation()}
-        className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+        className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer slider min-w-0"
         style={{ pointerEvents: 'auto' }}
       />
       <span className="text-xs text-gray-400 font-mono w-8 flex-shrink-0">

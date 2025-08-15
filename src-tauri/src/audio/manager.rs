@@ -41,12 +41,12 @@ impl AudioManager {
 
         info!("Initializing audio system...");
 
-        if let Some(vb_device) = manager.find_vb_cable_device() {
-            let device_name = vb_device.name().unwrap_or_default();
+        if let Some(virtual_device) = manager.find_virtual_audio_device() {
+            let device_name = virtual_device.name().unwrap_or_default();
             manager.set_virtual_device(&device_name)?;
-            info!("Found and set VB-Cable as virtual device: {}", device_name);
+            info!("Found and set virtual audio device: {}", device_name);
         } else {
-            warn!("VB-Cable device not found for virtual device");
+            warn!("Virtual audio device not found");
         }
 
         if let Some(default_device) = manager.host.default_output_device() {
@@ -73,12 +73,12 @@ impl AudioManager {
         Ok(manager)
     }
 
-    pub fn find_vb_cable_device(&self) -> Option<Device> {
+    pub fn find_virtual_audio_device(&self) -> Option<Device> {
         if let Ok(output_devices) = self.host.output_devices() {
             for device in output_devices {
-                let name = device.name().unwrap_or_default().to_lowercase();
+                let name = device.name().unwrap_or_default();
                 info!("Checking output device: {}", name);
-                if name.contains("cable") || name.contains("vb-audio") || name.contains("virtual") || name.contains("vb-cable") {
+                if crate::external::virtual_audio::is_virtual_audio_device(&name) {
                     info!("Found virtual device in output devices: {}", name);
                     return Some(device);
                 }
@@ -101,68 +101,77 @@ impl AudioManager {
         Err(anyhow::anyhow!("Device not found: {}", device_name))
     }
 
-    pub fn set_output_device(&self, device_name: &str) -> Result<()> {
-        let device = self
-            .host
-            .output_devices()?
+    fn set_device_from_iterator<I>(&self, device_ref: &Arc<Mutex<Option<Device>>>, devices: I, device_name: &str, device_type: &str) -> Result<()>
+    where
+        I: IntoIterator<Item = Device>,
+    {
+        let device = devices
+            .into_iter()
             .find(|d| d.name().unwrap_or_default() == device_name)
             .context("Device not found")?;
-        *self.output_device.lock().unwrap() = Some(device);
-        info!("Set output device to: {}", device_name);
+        *device_ref.lock().unwrap() = Some(device);
+        info!("Set {} device to: {}", device_type, device_name);
         Ok(())
     }
 
+    pub fn set_output_device(&self, device_name: &str) -> Result<()> {
+        let devices = self.host.output_devices()?;
+        self.set_device_from_iterator(&self.output_device, devices, device_name, "output")
+    }
+
     pub fn set_input_device(&self, device_name: &str) -> Result<()> {
-        let device = self
-            .host
-            .input_devices()?
-            .find(|d| d.name().unwrap_or_default() == device_name)
-            .context("Device not found")?;
-        *self.input_device.lock().unwrap() = Some(device);
-        info!("Set input device to: {}", device_name);
+        let devices = self.host.input_devices()?;
+        self.set_device_from_iterator(&self.input_device, devices, device_name, "input")
+    }
+
+    fn get_volume(&self, volume_ref: &Arc<Mutex<f32>>) -> f32 {
+        *volume_ref.lock().unwrap()
+    }
+
+    fn set_volume(&self, volume_ref: &Arc<Mutex<f32>>, volume: f32) -> Result<()> {
+        let volume = volume.clamp(0.0, 1.0);
+        *volume_ref.lock().unwrap() = volume;
         Ok(())
     }
 
     pub fn get_virtual_volume(&self) -> f32 {
-        *self.virtual_volume.lock().unwrap()
+        self.get_volume(&self.virtual_volume)
     }
 
     pub fn set_virtual_volume(&self, volume: f32) -> Result<()> {
-        let volume = volume.clamp(0.0, 1.0);
-        *self.virtual_volume.lock().unwrap() = volume;
-        Ok(())
+        self.set_volume(&self.virtual_volume, volume)
     }
 
     pub fn get_output_volume(&self) -> f32 {
-        *self.output_volume.lock().unwrap()
+        self.get_volume(&self.output_volume)
     }
 
     pub fn set_output_volume(&self, volume: f32) -> Result<()> {
-        let volume = volume.clamp(0.0, 1.0);
-        *self.output_volume.lock().unwrap() = volume;
-        Ok(())
+        self.set_volume(&self.output_volume, volume)
     }
 
     pub fn get_input_volume(&self) -> f32 {
-        *self.input_volume.lock().unwrap()
+        self.get_volume(&self.input_volume)
     }
 
     pub fn set_input_volume(&self, volume: f32) -> Result<()> {
-        let volume = volume.clamp(0.0, 1.0);
-        *self.input_volume.lock().unwrap() = volume;
-        Ok(())
+        self.set_volume(&self.input_volume, volume)
+    }
+
+    fn get_device(&self, device_ref: &Arc<Mutex<Option<Device>>>) -> Option<Device> {
+        device_ref.lock().unwrap().clone()
     }
 
     pub fn get_virtual_device(&self) -> Option<cpal::Device> {
-        self.virtual_device.lock().unwrap().clone()
+        self.get_device(&self.virtual_device)
     }
 
     pub fn get_output_device(&self) -> Option<cpal::Device> {
-        self.output_device.lock().unwrap().clone()
+        self.get_device(&self.output_device)
     }
 
     pub fn get_input_device(&self) -> Option<cpal::Device> {
-        self.input_device.lock().unwrap().clone()
+        self.get_device(&self.input_device)
     }
 
     pub fn set_playback_position(&self, sound_id: &str, position: f32) {
@@ -176,7 +185,6 @@ impl AudioManager {
     }
 
     pub fn start_input_capture(&self) -> Result<()> {
-        // Stop any existing capture first
         let _ = self.stop_input_capture();
 
         let input_name = self.get_input_device().and_then(|d| d.name().ok()).context("No input device set")?;
@@ -220,188 +228,40 @@ impl AudioManager {
 
             let buffer: Arc<Mutex<VecDeque<f32>>> = Arc::new(Mutex::new(VecDeque::with_capacity((input_sample_rate as usize) * input_channels * 2)));
 
-            // Input stream
             let buffer_in = buffer.clone();
-            let input_stream = match input_config.sample_format() {
-                SampleFormat::F32 => {
-                    let cfg: StreamConfig = input_config.clone().into();
-                    input_device.build_input_stream(&cfg, move |data: &[f32], _| {
-                        let mut buf = buffer_in.lock().unwrap();
-                        if buf.len() > buf.capacity().saturating_sub(data.len()) { let drain = data.len().min(1024); buf.drain(..drain); }
-                        for &sample in data { buf.push_back(sample); }
-                    }, move |err| { tracing::error!("Input stream error: {:?}", err); }, None)
+            let input_stream = {
+                let cfg: StreamConfig = input_config.clone().into();
+                let error_fn = move |err| { tracing::error!("Input stream error: {:?}", err); };
+                
+                match input_config.sample_format() {
+                    SampleFormat::F32 => input_device.build_input_stream(&cfg, create_input_stream_callback(buffer_in, |x: f32| x), error_fn, None),
+                    SampleFormat::I16 => input_device.build_input_stream(&cfg, create_input_stream_callback(buffer_in, |x: i16| x as f32 / i16::MAX as f32), error_fn, None),
+                    SampleFormat::U16 => input_device.build_input_stream(&cfg, create_input_stream_callback(buffer_in, |x: u16| (x as f32 - 32768.0) / 32768.0), error_fn, None),
+                    SampleFormat::I8 => input_device.build_input_stream(&cfg, create_input_stream_callback(buffer_in, |x: i8| x as f32 / i8::MAX as f32), error_fn, None),
+                    SampleFormat::U8 => input_device.build_input_stream(&cfg, create_input_stream_callback(buffer_in, |x: u8| (x as f32 - 128.0) / 128.0), error_fn, None),
+                    SampleFormat::I32 => input_device.build_input_stream(&cfg, create_input_stream_callback(buffer_in, |x: i32| x as f32 / i32::MAX as f32), error_fn, None),
+                    SampleFormat::U32 => input_device.build_input_stream(&cfg, create_input_stream_callback(buffer_in, |x: u32| (x as f32 - 2147483648.0) / 2147483648.0), error_fn, None),
+                    SampleFormat::F64 => input_device.build_input_stream(&cfg, create_input_stream_callback(buffer_in, |x: f64| x as f32), error_fn, None),
+                    _ => { tracing::error!("Unsupported input sample format"); return; }
                 }
-                SampleFormat::I16 => {
-                    let cfg: StreamConfig = input_config.clone().into();
-                    input_device.build_input_stream(&cfg, move |data: &[i16], _| {
-                        let mut buf = buffer_in.lock().unwrap();
-                        if buf.len() > buf.capacity().saturating_sub(data.len()) { let drain = data.len().min(1024); buf.drain(..drain); }
-                        for &sample in data { buf.push_back(sample as f32 / i16::MAX as f32); }
-                    }, move |err| { tracing::error!("Input stream error: {:?}", err); }, None)
-                }
-                SampleFormat::U16 => {
-                    let cfg: StreamConfig = input_config.clone().into();
-                    input_device.build_input_stream(&cfg, move |data: &[u16], _| {
-                        let mut buf = buffer_in.lock().unwrap();
-                        if buf.len() > buf.capacity().saturating_sub(data.len()) { let drain = data.len().min(1024); buf.drain(..drain); }
-                        for &sample in data { buf.push_back((sample as f32 - 32768.0) / 32768.0); }
-                    }, move |err| { tracing::error!("Input stream error: {:?}", err); }, None)
-                }
-                SampleFormat::I8 => {
-                    let cfg: StreamConfig = input_config.clone().into();
-                    input_device.build_input_stream(&cfg, move |data: &[i8], _| {
-                        let mut buf = buffer_in.lock().unwrap();
-                        if buf.len() > buf.capacity().saturating_sub(data.len()) { let drain = data.len().min(1024); buf.drain(..drain); }
-                        for &sample in data { buf.push_back(sample as f32 / i8::MAX as f32); }
-                    }, move |err| { tracing::error!("Input stream error: {:?}", err); }, None)
-                }
-                SampleFormat::U8 => {
-                    let cfg: StreamConfig = input_config.clone().into();
-                    input_device.build_input_stream(&cfg, move |data: &[u8], _| {
-                        let mut buf = buffer_in.lock().unwrap();
-                        if buf.len() > buf.capacity().saturating_sub(data.len()) { let drain = data.len().min(1024); buf.drain(..drain); }
-                        for &sample in data { buf.push_back((sample as f32 - 128.0) / 128.0); }
-                    }, move |err| { tracing::error!("Input stream error: {:?}", err); }, None)
-                }
-                SampleFormat::I32 => {
-                    let cfg: StreamConfig = input_config.clone().into();
-                    input_device.build_input_stream(&cfg, move |data: &[i32], _| {
-                        let mut buf = buffer_in.lock().unwrap();
-                        if buf.len() > buf.capacity().saturating_sub(data.len()) { let drain = data.len().min(1024); buf.drain(..drain); }
-                        for &sample in data { buf.push_back(sample as f32 / i32::MAX as f32); }
-                    }, move |err| { tracing::error!("Input stream error: {:?}", err); }, None)
-                }
-                SampleFormat::U32 => {
-                    let cfg: StreamConfig = input_config.clone().into();
-                    input_device.build_input_stream(&cfg, move |data: &[u32], _| {
-                        let mut buf = buffer_in.lock().unwrap();
-                        if buf.len() > buf.capacity().saturating_sub(data.len()) { let drain = data.len().min(1024); buf.drain(..drain); }
-                        for &sample in data { buf.push_back((sample as f32 - 2147483648.0) / 2147483648.0); }
-                    }, move |err| { tracing::error!("Input stream error: {:?}", err); }, None)
-                }
-                SampleFormat::F64 => {
-                    let cfg: StreamConfig = input_config.clone().into();
-                    input_device.build_input_stream(&cfg, move |data: &[f64], _| {
-                        let mut buf = buffer_in.lock().unwrap();
-                        if buf.len() > buf.capacity().saturating_sub(data.len()) { let drain = data.len().min(1024); buf.drain(..drain); }
-                        for &sample in data { buf.push_back(sample as f32); }
-                    }, move |err| { tracing::error!("Input stream error: {:?}", err); }, None)
-                }
-                _ => { tracing::error!("Unsupported input sample format"); return; }
             };
 
-            // Output stream
             let buffer_out = buffer.clone();
-            let output_stream = match output_config.sample_format() {
-                SampleFormat::F32 => {
-                    let cfg: StreamConfig = output_config.clone().into();
-                    output_device.build_output_stream(&cfg, move |data: &mut [f32], _| {
-                        let input_vol = *input_volume_ref.lock().unwrap();
-                        let virt_vol = *virtual_volume_ref.lock().unwrap();
-                        let vol = (input_vol * virt_vol).clamp(0.0, 1.0);
-                        let mut buf = buffer_out.lock().unwrap();
-                        fill_output_from_buffer(data, &mut buf, input_channels, output_channels, vol);
-                    }, move |err| { tracing::error!("Output stream error: {:?}", err); }, None)
+            let output_stream = {
+                let cfg: StreamConfig = output_config.clone().into();
+                let error_fn = move |err| { tracing::error!("Output stream error: {:?}", err); };
+                
+                match output_config.sample_format() {
+                    SampleFormat::F32 => output_device.build_output_stream(&cfg, create_output_stream_callback(buffer_out, input_volume_ref, virtual_volume_ref, input_channels, output_channels, |x: f32| x), error_fn, None),
+                    SampleFormat::I8 => output_device.build_output_stream(&cfg, create_output_stream_callback(buffer_out, input_volume_ref, virtual_volume_ref, input_channels, output_channels, i8::from_sample), error_fn, None),
+                    SampleFormat::U8 => output_device.build_output_stream(&cfg, create_output_stream_callback(buffer_out, input_volume_ref, virtual_volume_ref, input_channels, output_channels, u8::from_sample), error_fn, None),
+                    SampleFormat::I16 => output_device.build_output_stream(&cfg, create_output_stream_callback(buffer_out, input_volume_ref, virtual_volume_ref, input_channels, output_channels, i16::from_sample), error_fn, None),
+                    SampleFormat::U16 => output_device.build_output_stream(&cfg, create_output_stream_callback(buffer_out, input_volume_ref, virtual_volume_ref, input_channels, output_channels, u16::from_sample), error_fn, None),
+                    SampleFormat::I32 => output_device.build_output_stream(&cfg, create_output_stream_callback(buffer_out, input_volume_ref, virtual_volume_ref, input_channels, output_channels, i32::from_sample), error_fn, None),
+                    SampleFormat::U32 => output_device.build_output_stream(&cfg, create_output_stream_callback(buffer_out, input_volume_ref, virtual_volume_ref, input_channels, output_channels, u32::from_sample), error_fn, None),
+                    SampleFormat::F64 => output_device.build_output_stream(&cfg, create_output_stream_callback(buffer_out, input_volume_ref, virtual_volume_ref, input_channels, output_channels, f64::from_sample), error_fn, None),
+                    _ => { tracing::error!("Unsupported output sample format"); return; }
                 }
-                SampleFormat::I8 => {
-                    let cfg: StreamConfig = output_config.clone().into();
-                    output_device.build_output_stream(&cfg, move |data: &mut [i8], _| {
-                        let input_vol = *input_volume_ref.lock().unwrap();
-                        let virt_vol = *virtual_volume_ref.lock().unwrap();
-                        let vol = (input_vol * virt_vol).clamp(0.0, 1.0);
-                        let mut fbuf = vec![0.0f32; data.len()];
-                        {
-                            let mut buf = buffer_out.lock().unwrap();
-                            fill_output_from_buffer(&mut fbuf[..], &mut buf, input_channels, output_channels, vol);
-                        }
-                        for (d, s) in data.iter_mut().zip(fbuf.iter()) { *d = i8::from_sample(*s); }
-                    }, move |err| { tracing::error!("Output stream error: {:?}", err); }, None)
-                }
-                SampleFormat::U8 => {
-                    let cfg: StreamConfig = output_config.clone().into();
-                    output_device.build_output_stream(&cfg, move |data: &mut [u8], _| {
-                        let input_vol = *input_volume_ref.lock().unwrap();
-                        let virt_vol = *virtual_volume_ref.lock().unwrap();
-                        let vol = (input_vol * virt_vol).clamp(0.0, 1.0);
-                        let mut fbuf = vec![0.0f32; data.len()];
-                        {
-                            let mut buf = buffer_out.lock().unwrap();
-                            fill_output_from_buffer(&mut fbuf[..], &mut buf, input_channels, output_channels, vol);
-                        }
-                        for (d, s) in data.iter_mut().zip(fbuf.iter()) { *d = u8::from_sample(*s); }
-                    }, move |err| { tracing::error!("Output stream error: {:?}", err); }, None)
-                }
-                SampleFormat::I16 => {
-                    let cfg: StreamConfig = output_config.clone().into();
-                    output_device.build_output_stream(&cfg, move |data: &mut [i16], _| {
-                        let input_vol = *input_volume_ref.lock().unwrap();
-                        let virt_vol = *virtual_volume_ref.lock().unwrap();
-                        let vol = (input_vol * virt_vol).clamp(0.0, 1.0);
-                        let mut fbuf = vec![0.0f32; data.len()];
-                        {
-                            let mut buf = buffer_out.lock().unwrap();
-                            fill_output_from_buffer(&mut fbuf[..], &mut buf, input_channels, output_channels, vol);
-                        }
-                        for (d, s) in data.iter_mut().zip(fbuf.iter()) { *d = i16::from_sample(*s); }
-                    }, move |err| { tracing::error!("Output stream error: {:?}", err); }, None)
-                }
-                SampleFormat::U16 => {
-                    let cfg: StreamConfig = output_config.clone().into();
-                    output_device.build_output_stream(&cfg, move |data: &mut [u16], _| {
-                        let input_vol = *input_volume_ref.lock().unwrap();
-                        let virt_vol = *virtual_volume_ref.lock().unwrap();
-                        let vol = (input_vol * virt_vol).clamp(0.0, 1.0);
-                        let mut fbuf = vec![0.0f32; data.len()];
-                        {
-                            let mut buf = buffer_out.lock().unwrap();
-                            fill_output_from_buffer(&mut fbuf[..], &mut buf, input_channels, output_channels, vol);
-                        }
-                        for (d, s) in data.iter_mut().zip(fbuf.iter()) { *d = u16::from_sample(*s); }
-                    }, move |err| { tracing::error!("Output stream error: {:?}", err); }, None)
-                }
-                SampleFormat::I32 => {
-                    let cfg: StreamConfig = output_config.clone().into();
-                    output_device.build_output_stream(&cfg, move |data: &mut [i32], _| {
-                        let input_vol = *input_volume_ref.lock().unwrap();
-                        let virt_vol = *virtual_volume_ref.lock().unwrap();
-                        let vol = (input_vol * virt_vol).clamp(0.0, 1.0);
-                        let mut fbuf = vec![0.0f32; data.len()];
-                        {
-                            let mut buf = buffer_out.lock().unwrap();
-                            fill_output_from_buffer(&mut fbuf[..], &mut buf, input_channels, output_channels, vol);
-                        }
-                        for (d, s) in data.iter_mut().zip(fbuf.iter()) { *d = i32::from_sample(*s); }
-                    }, move |err| { tracing::error!("Output stream error: {:?}", err); }, None)
-                }
-                SampleFormat::U32 => {
-                    let cfg: StreamConfig = output_config.clone().into();
-                    output_device.build_output_stream(&cfg, move |data: &mut [u32], _| {
-                        let input_vol = *input_volume_ref.lock().unwrap();
-                        let virt_vol = *virtual_volume_ref.lock().unwrap();
-                        let vol = (input_vol * virt_vol).clamp(0.0, 1.0);
-                        let mut fbuf = vec![0.0f32; data.len()];
-                        {
-                            let mut buf = buffer_out.lock().unwrap();
-                            fill_output_from_buffer(&mut fbuf[..], &mut buf, input_channels, output_channels, vol);
-                        }
-                        for (d, s) in data.iter_mut().zip(fbuf.iter()) { *d = u32::from_sample(*s); }
-                    }, move |err| { tracing::error!("Output stream error: {:?}", err); }, None)
-                }
-                SampleFormat::F64 => {
-                    let cfg: StreamConfig = output_config.clone().into();
-                    output_device.build_output_stream(&cfg, move |data: &mut [f64], _| {
-                        let input_vol = *input_volume_ref.lock().unwrap();
-                        let virt_vol = *virtual_volume_ref.lock().unwrap();
-                        let vol = (input_vol * virt_vol).clamp(0.0, 1.0);
-                        let mut fbuf = vec![0.0f32; data.len()];
-                        {
-                            let mut buf = buffer_out.lock().unwrap();
-                            fill_output_from_buffer(&mut fbuf[..], &mut buf, input_channels, output_channels, vol);
-                        }
-                        for (d, s) in data.iter_mut().zip(fbuf.iter()) { *d = f64::from_sample(*s); }
-                    }, move |err| { tracing::error!("Output stream error: {:?}", err); }, None)
-                }
-                _ => { tracing::error!("Unsupported output sample format"); return; }
             };
 
             let input_stream = match input_stream { Ok(s) => s, Err(e) => { tracing::error!("Failed to build input stream: {}", e); return; } };
@@ -441,6 +301,60 @@ struct InputCaptureControl {
     join_handle: Option<std::thread::JoinHandle<()>>,
 }
 
+fn create_input_stream_callback<T>(
+    buffer: Arc<Mutex<VecDeque<f32>>>,
+    converter: fn(T) -> f32,
+) -> impl Fn(&[T], &cpal::InputCallbackInfo) + Send + 'static
+where
+    T: Sample + Send + 'static,
+{
+    move |data: &[T], _| {
+        let mut buf = buffer.lock().unwrap();
+        if buf.len() > buf.capacity().saturating_sub(data.len()) {
+            let drain = data.len().min(1024);
+            buf.drain(..drain);
+        }
+        for &sample in data {
+            buf.push_back(converter(sample));
+        }
+    }
+}
+
+fn create_output_stream_callback<T>(
+    buffer: Arc<Mutex<VecDeque<f32>>>,
+    input_volume_ref: Arc<Mutex<f32>>,
+    virtual_volume_ref: Arc<Mutex<f32>>,
+    input_channels: usize,
+    output_channels: usize,
+    converter: fn(f32) -> T,
+) -> impl Fn(&mut [T], &cpal::OutputCallbackInfo) + Send + 'static
+where
+    T: Sample + Send + 'static,
+{
+    move |data: &mut [T], _| {
+        let input_vol = *input_volume_ref.lock().unwrap();
+        let virt_vol = *virtual_volume_ref.lock().unwrap();
+        let vol = (input_vol * virt_vol).clamp(0.0, 1.0);
+        
+        if std::mem::size_of::<T>() == std::mem::size_of::<f32>() {
+            let f32_data = unsafe { 
+                std::slice::from_raw_parts_mut(data.as_mut_ptr() as *mut f32, data.len())
+            };
+            let mut buf = buffer.lock().unwrap();
+            fill_output_from_buffer(f32_data, &mut buf, input_channels, output_channels, vol);
+        } else {
+            let mut fbuf = vec![0.0f32; data.len()];
+            {
+                let mut buf = buffer.lock().unwrap();
+                fill_output_from_buffer(&mut fbuf[..], &mut buf, input_channels, output_channels, vol);
+            }
+            for (d, s) in data.iter_mut().zip(fbuf.iter()) {
+                *d = converter(*s);
+            }
+        }
+    }
+}
+
 fn fill_output_from_buffer(data: &mut [f32], buffer: &mut VecDeque<f32>, in_ch: usize, out_ch: usize, vol: f32) {
     let frames = data.len() / out_ch;
     for frame_idx in 0..frames {
@@ -451,7 +365,7 @@ fn fill_output_from_buffer(data: &mut [f32], buffer: &mut VecDeque<f32>, in_ch: 
         }
         // Map to output channels
         for c in 0..out_ch {
-            let sample = if in_ch == 0 { 0.0 } else if in_ch == out_ch { inputs[c] } else if in_ch == 1 { inputs[0] } else if out_ch == 1 { inputs.iter().sum::<f32>() / in_ch as f32 } else { // basic stereo from multi-channel
+            let sample = if in_ch == 0 { 0.0 } else if in_ch == out_ch { inputs[c] } else if in_ch == 1 { inputs[0] } else if out_ch == 1 { inputs.iter().sum::<f32>() / in_ch as f32 } else {
                 // use first two channels or average
                 if c < in_ch { inputs[c] } else { inputs.iter().take(2).sum::<f32>() / 2.0f32 }
             };

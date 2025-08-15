@@ -4,9 +4,12 @@ import { TabType, AudioDevice, Hotkey } from './types';
 import { useAudio } from './hooks/useAudio';
 import { useSounds } from './hooks/useSounds';
 import { useHotkeys } from './hooks/useHotkeys';
+import { useViewPreference } from './hooks/useViewPreference';
 import { Header } from './components/Header';
 import { Navigation } from './components/Navigation';
 import { SoundCard } from './components/SoundCard';
+import { SoundListItem } from './components/SoundListItem';
+import { ViewToggle } from './components/ViewToggle';
 import { CategorySidebar } from './components/CategorySidebar';
 import { YouTubeSearch } from './components/YouTubeSearch';
 import { invoke } from '@tauri-apps/api/core';
@@ -39,6 +42,7 @@ function App() {
   const [openOutputSettings, setOpenOutputSettings] = useState(false);
   const [openInputSettings, setOpenInputSettings] = useState(false);
   const [openVirtualSettings, setOpenVirtualSettings] = useState(false);
+  const { view: currentView, updateView: setCurrentView, isLoading: viewLoading } = useViewPreference();
 
   const {
     audioDevices,
@@ -80,6 +84,15 @@ function App() {
     handleSetHotkey,
     handleSetCategories,
   } = useSounds();
+
+  const handleSetDisplayName = async (soundId: string, displayName: string | null) => {
+    try {
+      await invoke('update_sound_display_name', { id: soundId, displayName });
+      await loadSounds();
+    } catch (error) {
+      console.error('Failed to update display name:', error);
+    }
+  };
   const sounds = rawSounds.map(normalizeSoundHotkey);
 
   const {
@@ -90,7 +103,9 @@ function App() {
   } = useHotkeys();
 
   const filteredSounds = sounds.filter(sound => {
-    const matchesSearch = sound.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const searchText = searchQuery.toLowerCase();
+    const matchesSearch = sound.name.toLowerCase().includes(searchText) || 
+                         (sound.display_name && sound.display_name.toLowerCase().includes(searchText));
     const categoriesList = sound.categories && sound.categories.length > 0
       ? sound.categories
       : (sound.category ? [sound.category] : []);
@@ -462,6 +477,7 @@ function App() {
                         className="text-xs text-gray-400 hover:text-gray-200 font-mono mr-3"
                       >Nobody can hear me!</button>
                     )}
+                    <ViewToggle view={currentView} onViewChange={setCurrentView} isLoading={viewLoading} />
                     <div className="relative group">
                       <button
                         onClick={handleImportAudio}
@@ -492,31 +508,60 @@ function App() {
                 </div>
 
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
-                {filteredSounds.map((sound, index) => (
-                  <SoundCard
-                    key={sound.id}
-                    sound={sound}
-                    isPlaying={playingSounds.has(sound.id)}
-                    isPlayingLocalOnly={localOnlySounds.has(sound.id)}
-                    onPlay={(soundId) => handlePlaySound(soundId, false, concurrentAudio)}
-                    onStop={handleStopSound}
-                    onVolumeChange={handleSoundVolumeChange}
-                    onRemove={async (id, del) => { console.log('[App] onRemove forwarded', { id, del }); await handleRemoveSound(id, del); console.log('[App] onRemove completed', { id, del }); }}
-                    onPlayLocal={(soundId) => handlePlaySound(soundId, true, concurrentAudio)}
-                    onSetStartPosition={handleSetStartPosition}
-                    onSetHotkey={(soundId, hotkey) => {
-                      if (typeof hotkey === 'string') return;
-                      handleSetHotkey(soundId, hotkey);
-                    }}
-                    onSetCategories={handleSetCategories}
-                    availableCategories={categories}
-                    onSeek={handleSeekSound}
-                    getPlaybackPosition={getPlaybackPosition}
-                    index={index}
-                  />
-                ))}
-              </div>
+                {currentView === 'grid' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+                    {filteredSounds.map((sound, index) => (
+                      <SoundCard
+                        key={sound.id}
+                        sound={sound}
+                        isPlaying={playingSounds.has(sound.id)}
+                        isPlayingLocalOnly={localOnlySounds.has(sound.id)}
+                        onPlay={(soundId) => handlePlaySound(soundId, false, concurrentAudio)}
+                        onStop={handleStopSound}
+                        onVolumeChange={handleSoundVolumeChange}
+                        onRemove={async (id, del) => { console.log('[App] onRemove forwarded', { id, del }); await handleRemoveSound(id, del); console.log('[App] onRemove completed', { id, del }); }}
+                        onPlayLocal={(soundId) => handlePlaySound(soundId, true, concurrentAudio)}
+                        onSetStartPosition={handleSetStartPosition}
+                        onSetHotkey={(soundId, hotkey) => {
+                          if (typeof hotkey === 'string') return;
+                          handleSetHotkey(soundId, hotkey);
+                        }}
+                        onSetCategories={handleSetCategories}
+                        onSetDisplayName={handleSetDisplayName}
+                        availableCategories={categories}
+                        onSeek={handleSeekSound}
+                        getPlaybackPosition={getPlaybackPosition}
+                        index={index}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredSounds.map((sound) => (
+                      <SoundListItem
+                        key={sound.id}
+                        sound={sound}
+                        isPlaying={playingSounds.has(sound.id)}
+                        isPlayingLocalOnly={localOnlySounds.has(sound.id)}
+                        onPlay={(soundId) => handlePlaySound(soundId, false, concurrentAudio)}
+                        onStop={handleStopSound}
+                        onVolumeChange={handleSoundVolumeChange}
+                        onRemove={async (id, del) => { console.log('[App] onRemove forwarded', { id, del }); await handleRemoveSound(id, del); console.log('[App] onRemove completed', { id, del }); }}
+                        onPlayLocal={(soundId) => handlePlaySound(soundId, true, concurrentAudio)}
+                        onSetStartPosition={handleSetStartPosition}
+                        onSetHotkey={(soundId, hotkey) => {
+                          if (typeof hotkey === 'string') return;
+                          handleSetHotkey(soundId, hotkey);
+                        }}
+                        onSetCategories={handleSetCategories}
+                        onSetDisplayName={handleSetDisplayName}
+                        availableCategories={categories}
+                        onSeek={handleSeekSound}
+                        getPlaybackPosition={getPlaybackPosition}
+                      />
+                    ))}
+                  </div>
+                )}
 
               {filteredSounds.length === 0 && (
                 <div className="text-center py-16">
@@ -606,7 +651,7 @@ function App() {
           
 
           {activeTab === 'settings' && (
-            <div className="container mx-auto px-6 py-8">
+            <div className="container mx-auto px-6 py-8 pb-16">
               <div className="space-y-8 max-w-2xl fade-in">
               <div className="flex space-x-4 mb-6">
                 <button onClick={() => setSettingsTab('devices')} className={`px-4 py-2 rounded font-mono text-sm ${settingsTab === 'devices' ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-300'}`}>Devices</button>
@@ -850,7 +895,7 @@ function App() {
               )}
               {settingsTab === 'hotkeys' && (
                 <>
-                  <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800 space-y-4">
+                  <div className="bg-gray-900/60 rounded-lg p-6 border border-gray-800 space-y-4 mb-8">
                     <h3 className="text-lg font-mono font-semibold mb-2">Hotkeys</h3>
                     {hotkeysError && (
                       <div className="text-red-400 text-sm font-mono">

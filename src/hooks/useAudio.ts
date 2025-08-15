@@ -267,8 +267,14 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
           return newSet;
         });
         
-        setLocalOnlySounds(() => {
-          return new Set();
+        setLocalOnlySounds(prev => {
+          const newLocalOnlySet = new Set<string>();
+          for (const soundId of currentlyPlaying) {
+            if (prev.has(soundId)) {
+              newLocalOnlySet.add(soundId);
+            }
+          }
+          return newLocalOnlySet;
         });
       } catch (error) {
         console.error('Failed to check playing sounds:', error);
@@ -295,15 +301,20 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
   };
 
 
-  const checkVirtualCable = async () => {
+  const checkVirtualAudio = async () => {
     try {
-      const result = await invoke('check_virtual_cable');
-      console.log('Virtual cable status:', result);
+      const result = await invoke('check_virtual_audio_status');
+      console.log('Virtual audio status:', result);
       return result;
     } catch (error) {
-      console.error('Failed to check virtual cable:', error);
+      console.error('Failed to check virtual audio:', error);
       return null;
     }
+  };
+  
+  // Backwards compatibility
+  const checkVirtualCable = async () => {
+    return await checkVirtualAudio();
   };
 
 
@@ -320,15 +331,20 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
   };
 
 
-  const installVirtualCable = async () => {
+  const setupVirtualAudio = async () => {
     try {
-      const result = await invoke('install_virtual_cable');
-      console.log('Install VB-Cable result:', result);
+      const result = await invoke('setup_virtual_audio');
+      console.log('Setup virtual audio result:', result);
       return result;
     } catch (error) {
-      console.error('Failed to install VB-Cable:', error);
+      console.error('Failed to setup virtual audio:', error);
       return null;
     }
+  };
+  
+  // Backwards compatibility
+  const installVirtualCable = async () => {
+    return await setupVirtualAudio();
   };
 
   return {
@@ -360,6 +376,8 @@ export const useAudio = (showAllOutputDevices: boolean = false) => {
     handleStartInputCapture,
     handleToggleInputCapture,
     debugAudioStatus,
+    checkVirtualAudio,
+    setupVirtualAudio,
     checkVirtualCable,
     installVirtualCable,
   };

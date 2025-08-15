@@ -102,14 +102,14 @@ export const CategorySidebar: React.FC<CategorySidebarProps> = ({
               }`}>
                 <button
                   onClick={() => onCategorySelect(category)}
-                  className={`flex-1 flex items-center gap-3 text-left ${isSelected ? 'text-white' : 'text-gray-300 hover:text-white'}`}
+                  className={`flex-1 flex items-center gap-3 text-left min-w-0 ${isSelected ? 'text-white' : 'text-gray-300 hover:text-white'}`}
                 >
                   {isSelected ? (
                     <FolderOpen className="h-4 w-4 flex-shrink-0" />
                   ) : (
                     <Folder className="h-4 w-4 flex-shrink-0" />
                   )}
-                  <span className="font-mono text-sm truncate">
+                  <span className="font-mono text-sm truncate min-w-0 flex-1" title={category === 'All' ? 'All Sounds' : category || 'Uncategorized'}>
                     {category === 'All' ? 'All Sounds' : category || 'Uncategorized'}
                   </span>
                 </button>
@@ -146,14 +146,14 @@ export const CategorySidebar: React.FC<CategorySidebarProps> = ({
               }`}>
                 <button
                   onClick={() => onCategorySelect(category)}
-                  className={`flex-1 flex items-center gap-3 text-left ${isSelected ? 'text-white' : 'text-gray-300 hover:text-white'}`}
+                  className={`flex-1 flex items-center gap-3 text-left min-w-0 ${isSelected ? 'text-white' : 'text-gray-300 hover:text-white'}`}
                 >
                   {isSelected ? (
                     <FolderOpen className="h-4 w-4 flex-shrink-0" />
                   ) : (
                     <Folder className="h-4 w-4 flex-shrink-0" />
                   )}
-                  <span className="font-mono text-sm truncate">
+                  <span className="font-mono text-sm truncate min-w-0 flex-1" title={category}>
                     {category}
                   </span>
                 </button>

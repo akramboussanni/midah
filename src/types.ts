@@ -13,6 +13,7 @@ export interface Hotkey {
 export interface Sound {
   id: string;
   name: string;
+  display_name?: string;
   file_path: string;
   category?: string;
   categories?: string[];
@@ -31,6 +32,7 @@ export interface AudioDevice {
 }
 
 export type TabType = 'sounds' | 'youtube' | 'settings';
+export type ViewType = 'grid' | 'list';
 
 export interface VideoInfo {
   id: string;

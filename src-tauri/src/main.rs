@@ -116,6 +116,7 @@ fn main() {
             soundboard::import_audio_file,
             soundboard::update_sound_volume,
             soundboard::update_sound_hotkey,
+            soundboard::update_sound_display_name,
             soundboard::update_sound_category,
             soundboard::update_sound_categories,
             soundboard::play_sound_local,
@@ -141,8 +142,17 @@ fn main() {
             app_handlers::check_dependencies,
             app_handlers::download_dependencies,
             app_handlers::update_yt_dlp,
+            app_handlers::open_browser,
             external::vbcable::check_virtual_cable,
             external::vbcable::install_virtual_cable,
+            external::virtual_audio::check_virtual_audio_status,
+            external::virtual_audio::setup_virtual_audio,
+            #[cfg(target_os = "linux")]
+            external::pipewire::check_pipewire_status,
+            #[cfg(target_os = "linux")]
+            external::pipewire::setup_pipewire_virtual_sink,
+            #[cfg(target_os = "linux")]
+            external::pipewire::remove_pipewire_virtual_sink,
             external::youtube::search_videos,
             external::youtube::get_video_info,
             external::youtube::get_video_info_by_url,

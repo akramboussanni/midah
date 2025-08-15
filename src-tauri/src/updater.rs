@@ -10,6 +10,8 @@ pub struct UpdateInfoPayload {
     pub version: String,
     pub changelog: String,
     pub msi_url: Option<String>,
+    pub is_linux: bool,
+    pub github_release_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -66,6 +68,8 @@ pub async fn check_for_update(app: AppHandle) {
             version: latest_version_raw,
             changelog: release.body,
             msi_url,
+            is_linux: cfg!(target_os = "linux"),
+            github_release_url: Some(format!("https://github.com/{}/releases/latest", repo)),
         };
         let _ = app.emit("update-available", payload);
     }

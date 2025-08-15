@@ -1,4 +1,4 @@
-import { Music, Sparkles, Mic, Volume2, Minus, X, Maximize2, Minimize2 } from 'lucide-react';
+import { Music, Sparkles, Mic, Volume2, Minus, X, Maximize2, Minimize2, MessageCircle } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
@@ -79,14 +79,29 @@ export const Header = ({
           <span className="text-sm font-mono text-gray-300">Midah Soundboard</span>
         </div>
         <div className="flex items-center space-x-2">
+          <button
+            onClick={async () => {
+              try {
+                await invoke('open_browser', { url: 'https://discord.gg/9sj6EX8Usw' });
+              } catch (error) {
+                console.error('Failed to open Discord link:', error);
+              }
+            }}
+            className="px-2 py-0.5 text-xs font-mono bg-indigo-600 hover:bg-indigo-500 text-white rounded mr-1 flex items-center space-x-1"
+            data-tauri-drag-region="none"
+            title="Join our Discord server"
+          >
+            <MessageCircle className="h-3 w-3" />
+            <span>Discord</span>
+          </button>
           {visible && update && (
             <button
               onClick={() => setShowDialog(true)}
               className="px-2 py-0.5 text-xs font-mono bg-blue-700 hover:bg-blue-600 text-white rounded mr-1"
               data-tauri-drag-region="none"
-              title={`Update to v${update.version}`}
+              title={update.is_linux ? `New version v${update.version} available` : `Update to v${update.version}`}
             >
-              Update v{update.version}
+              {update.is_linux ? `New v${update.version}` : `Update v${update.version}`}
             </button>
           )}
           <button
@@ -186,36 +201,61 @@ export const Header = ({
               <div className="max-h-[50vh] overflow-y-auto p-3 rounded bg-gray-800/40 border border-gray-700">
                 <pre className="whitespace-pre-wrap break-words text-xs font-mono text-gray-200">{update.changelog}</pre>
               </div>
+              {update.is_linux && (
+                <div className="mt-3 p-3 rounded bg-blue-900/20 border border-blue-800/30">
+                  <p className="text-xs text-blue-200 font-mono">
+                    Click "View Release" to see the latest version and download instructions. Autoinstaller is not available on Linux.
+                  </p>
+                </div>
+              )}
               <div className="flex items-center gap-2 mt-3 justify-end">
                 <button onClick={() => { setShowDialog(false); dismiss(); }} className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded font-mono">
                   Later
                 </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      if (update.msi_url) {
-                        await invoke('download_and_install_update', { msiUrl: update.msi_url });
+                {update.is_linux ? (
+                  <button
+                    onClick={async () => {
+                      try {
+                        if (update.github_release_url) {
+                          await invoke('open_browser', { url: update.github_release_url });
+                        }
+                      } catch (e) {
+                        console.error('Failed to open GitHub release:', e);
+                        alert(`Failed to open GitHub release: ${e}`);
                       }
-                    } catch (e) {
-                      console.error('Failed to update:', e);
-                      alert(`Failed to start update: ${e}`);
-                    }
-                  }}
-                  disabled={['downloading','launching','launched'].includes(progress?.status || '')}
-                  className={`px-3 py-1 text-xs rounded font-mono text-white ${
-                    ['downloading','launching','launched'].includes(progress?.status || '')
-                      ? 'bg-blue-900 cursor-not-allowed'
-                      : 'bg-blue-700 hover:bg-blue-600'
-                  }`}
-                >
-                  {progress?.status === 'downloading'
-                    ? 'Downloading...'
-                    : progress?.status === 'launching'
-                    ? 'Launching...'
-                    : progress?.status === 'launched'
-                    ? 'Installer launched'
-                    : 'Update Now'}
-                </button>
+                    }}
+                    className="px-3 py-1 text-xs rounded font-mono text-white bg-blue-700 hover:bg-blue-600"
+                  >
+                    View Release
+                  </button>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      try {
+                        if (update.msi_url) {
+                          await invoke('download_and_install_update', { msiUrl: update.msi_url });
+                        }
+                      } catch (e) {
+                        console.error('Failed to update:', e);
+                        alert(`Failed to start update: ${e}`);
+                      }
+                    }}
+                    disabled={['downloading','launching','launched'].includes(progress?.status || '')}
+                    className={`px-3 py-1 text-xs rounded font-mono text-white ${
+                      ['downloading','launching','launched'].includes(progress?.status || '')
+                        ? 'bg-blue-900 cursor-not-allowed'
+                        : 'bg-blue-700 hover:bg-blue-600'
+                    }`}
+                  >
+                                         {progress?.status === 'downloading'
+                       ? 'Downloading...'
+                      : progress?.status === 'launching'
+                      ? 'Launching...'
+                      : progress?.status === 'launched'
+                      ? 'Installer launched'
+                      : 'Update Now'}
+                  </button>
+                )}
               </div>
             </div>
           </div>

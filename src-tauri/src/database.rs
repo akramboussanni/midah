@@ -11,6 +11,7 @@ use crate::hotkeys::Hotkey;
 pub struct Sound {
     pub id: String,
     pub name: String,
+    pub display_name: Option<String>,
     pub file_path: String,
     pub category: Option<String>,
     pub hotkey: Option<Hotkey>,
@@ -40,6 +41,7 @@ pub fn init_database(db_path: &Path) -> Result<()> {
         "CREATE TABLE IF NOT EXISTS sounds (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
+            display_name TEXT,
             file_path TEXT NOT NULL,
             category TEXT,
             hotkey TEXT,
@@ -60,6 +62,9 @@ pub fn init_database(db_path: &Path) -> Result<()> {
         .collect();
     if !columns.iter().any(|c| c == "duration") {
         let _ = conn.execute("ALTER TABLE sounds ADD COLUMN duration REAL", []);
+    }
+    if !columns.iter().any(|c| c == "display_name") {
+        let _ = conn.execute("ALTER TABLE sounds ADD COLUMN display_name TEXT", []);
     }
 
     conn.execute(
@@ -144,11 +149,12 @@ pub fn add_sound(sound: &Sound) -> Result<()> {
         None => None,
     };
     conn.execute(
-        "INSERT OR REPLACE INTO sounds (id, name, file_path, category, hotkey, volume, start_position, duration, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        "INSERT OR REPLACE INTO sounds (id, name, display_name, file_path, category, hotkey, volume, start_position, duration, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             sound.id,
             sound.name,
+            sound.display_name,
             sound.file_path,
             sound.category,
             hotkey_json,
@@ -166,11 +172,11 @@ pub fn add_sound(sound: &Sound) -> Result<()> {
 pub fn get_sounds() -> Result<Vec<Sound>> {
     let conn = get_connection()?;
     let mut stmt = conn.prepare(
-        "SELECT id, name, file_path, category, hotkey, volume, start_position, duration, created_at, updated_at \
+        "SELECT id, name, display_name, file_path, category, hotkey, volume, start_position, duration, created_at, updated_at \
          FROM sounds ORDER BY name"
     )?;
     let sound_iter = stmt.query_map([], |row| {
-        let hotkey_str: Option<String> = row.get(4)?;
+        let hotkey_str: Option<String> = row.get(5)?;
         let hotkey = match hotkey_str {
             Some(ref s) => serde_json::from_str(s).ok(),
             None => None,
@@ -178,16 +184,17 @@ pub fn get_sounds() -> Result<Vec<Sound>> {
         Ok(Sound {
             id: row.get(0)?,
             name: row.get(1)?,
-            file_path: row.get(2)?,
-            category: row.get(3)?,
+            display_name: row.get(2)?,
+            file_path: row.get(3)?,
+            category: row.get(4)?,
             hotkey,
-            volume: row.get(5)?,
-            start_position: row.get(6)?,
-            duration: row.get(7)?,
-            created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(8)?)
+            volume: row.get(6)?,
+            start_position: row.get(7)?,
+            duration: row.get(8)?,
+            created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(9)?)
                 .unwrap_or_else(|_| Utc::now().into())
                 .with_timezone(&Utc),
-            updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(9)?)
+            updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(10)?)
                 .unwrap_or_else(|_| Utc::now().into())
                 .with_timezone(&Utc),
         })
@@ -199,12 +206,12 @@ pub fn get_sound_by_id(id: &str) -> Result<Option<Sound>> {
     let conn = get_connection()?;
     
     let mut stmt = conn.prepare(
-        "SELECT id, name, file_path, category, hotkey, volume, start_position, duration, created_at, updated_at 
+        "SELECT id, name, display_name, file_path, category, hotkey, volume, start_position, duration, created_at, updated_at 
          FROM sounds WHERE id = ?"
     )?;
     
     let mut sound_iter = stmt.query_map(params![id], |row| {
-        let hotkey_str: Option<String> = row.get(4)?;
+        let hotkey_str: Option<String> = row.get(5)?;
         let hotkey = match hotkey_str {
             Some(ref s) => serde_json::from_str(s).ok(),
             None => None,
@@ -212,16 +219,17 @@ pub fn get_sound_by_id(id: &str) -> Result<Option<Sound>> {
         Ok(Sound {
             id: row.get(0)?,
             name: row.get(1)?,
-            file_path: row.get(2)?,
-            category: row.get(3)?,
+            display_name: row.get(2)?,
+            file_path: row.get(3)?,
+            category: row.get(4)?,
             hotkey,
-            volume: row.get(5)?,
-            start_position: row.get(6)?,
-            duration: row.get(7)?,
-            created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(8)?)
+            volume: row.get(6)?,
+            start_position: row.get(7)?,
+            duration: row.get(8)?,
+            created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(9)?)
                 .unwrap_or_else(|_| Utc::now().into())
                 .with_timezone(&Utc),
-            updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(9)?)
+            updated_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(10)?)
                 .unwrap_or_else(|_| Utc::now().into())
                 .with_timezone(&Utc),
         })
@@ -428,5 +436,15 @@ pub fn update_sound_hotkey(sound_id: &str, hotkey: Option<&Hotkey>) -> Result<()
         params![hotkey_json, sound_id],
     )?;
     info!("Updated hotkey for sound with id: {}", sound_id);
+    Ok(())
+}
+
+pub fn update_sound_display_name(sound_id: &str, display_name: Option<&str>) -> Result<()> {
+    let conn = get_connection()?;
+    conn.execute(
+        "UPDATE sounds SET display_name = ? WHERE id = ?",
+        params![display_name, sound_id],
+    )?;
+    info!("Updated display name for sound with id: {}", sound_id);
     Ok(())
 } 

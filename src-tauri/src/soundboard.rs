@@ -19,6 +19,7 @@ pub struct AddSoundRequest {
 pub struct SoundResponse {
     pub id: String,
     pub name: String,
+    pub display_name: Option<String>,
     pub file_path: String,
     pub category: Option<String>,
     pub hotkey: Option<Hotkey>,
@@ -36,6 +37,7 @@ impl From<database::Sound> for SoundResponse {
         Self {
             id: sound.id,
             name: sound.name,
+            display_name: sound.display_name,
             file_path: sound.file_path,
             category: sound.category,
             hotkey: sound.hotkey,
@@ -66,6 +68,7 @@ pub async fn add_sound(request: AddSoundRequest) -> Result<SoundResponse, String
     let sound = database::Sound {
         id: Uuid::new_v4().to_string(),
         name: request.name,
+        display_name: None,
         file_path: request.file_path,
         category: request.category,
         hotkey: request.hotkey,
@@ -239,6 +242,14 @@ pub async fn update_sound_hotkey(_app: tauri::AppHandle, id: String, new_hotkey:
             let _ = controller.add_binding(hotkey.key, hotkey.modifiers, crate::hotkeys::HotkeyAction::PlaySound { sound_id: id.clone() }, Some(id));
         }
     }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_sound_display_name(id: String, display_name: Option<String>) -> Result<(), String> {
+    database::update_sound_display_name(&id, display_name.as_deref())
+        .map_err(|e| e.to_string())?;
+    info!("Updated display name for sound: {}", id);
     Ok(())
 }
 

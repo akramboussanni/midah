@@ -5,6 +5,8 @@ export interface UpdateInfoPayload {
   version: string;
   changelog: string;
   msi_url?: string | null;
+  is_linux: boolean;
+  github_release_url?: string | null;
 }
 
 export function useUpdater() {
