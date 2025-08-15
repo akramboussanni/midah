@@ -142,7 +142,7 @@ fn main() {
             app_handlers::check_dependencies,
             app_handlers::download_dependencies,
             app_handlers::update_yt_dlp,
-            app_handlers::open_browser,
+            external::shell::open_browser,
             external::vbcable::check_virtual_cable,
             external::vbcable::install_virtual_cable,
             external::virtual_audio::check_virtual_audio_status,

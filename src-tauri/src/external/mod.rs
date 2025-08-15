@@ -4,3 +4,4 @@ pub mod vbcable;
 #[cfg(target_os = "linux")]
 pub mod pipewire;
 pub mod virtual_audio;
+pub mod shell;

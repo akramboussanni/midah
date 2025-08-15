@@ -3,7 +3,6 @@ use crate::database;
 use crate::external;
 use tracing::info;
 use std::sync::Arc;
-use std::process::Command;
 
 static DEPENDENCY_MANAGER: std::sync::OnceLock<Arc<external::dependencies::DependencyManager>> = std::sync::OnceLock::new();
 
@@ -136,7 +135,8 @@ pub async fn download_dependencies(app: AppHandle) -> Result<serde_json::Value, 
 
 #[tauri::command]
 pub async fn update_yt_dlp(app: AppHandle) -> Result<String, String> {
-    use crate::external::dependencies::{DependencyManager, DependencyType, call_shell_process};
+    use crate::external::dependencies::{DependencyManager, DependencyType};
+    use crate::external::shell::call_shell_process;
     
     let dep_manager = DependencyManager::new().map_err(|e| e.to_string())?;
     
@@ -162,31 +162,4 @@ pub async fn update_yt_dlp(app: AppHandle) -> Result<String, String> {
     }
 }
 
-#[tauri::command]
-pub async fn open_browser(url: String) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        Command::new("cmd")
-            .args(&["/C", "start", &url])
-            .spawn()
-            .map_err(|e| format!("Failed to open browser: {}", e))?;
-    }
-    
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open")
-            .arg(&url)
-            .spawn()
-            .map_err(|e| format!("Failed to open browser: {}", e))?;
-    }
-    
-    #[cfg(target_os = "linux")]
-    {
-        Command::new("xdg-open")
-            .arg(&url)
-            .spawn()
-            .map_err(|e| format!("Failed to open browser: {}", e))?;
-    }
-    
-    Ok(())
-} 
+ 

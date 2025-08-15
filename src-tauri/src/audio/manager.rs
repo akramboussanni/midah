@@ -230,7 +230,7 @@ impl AudioManager {
 
             let buffer_in = buffer.clone();
             let input_stream = {
-                let cfg: StreamConfig = input_config.clone().into();
+                    let cfg: StreamConfig = input_config.clone().into();
                 let error_fn = move |err| { tracing::error!("Input stream error: {:?}", err); };
                 
                 match input_config.sample_format() {
@@ -248,7 +248,7 @@ impl AudioManager {
 
             let buffer_out = buffer.clone();
             let output_stream = {
-                let cfg: StreamConfig = output_config.clone().into();
+                    let cfg: StreamConfig = output_config.clone().into();
                 let error_fn = move |err| { tracing::error!("Output stream error: {:?}", err); };
                 
                 match output_config.sample_format() {
