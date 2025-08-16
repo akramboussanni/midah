@@ -275,7 +275,7 @@ impl DependencyManager {
         Ok(final_path)
     }
 
-    fn set_executable_permissions(&self, _path: &Path) -> Result<()> {
+    fn set_executable_permissions(&self, path: &Path) -> Result<()> {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
